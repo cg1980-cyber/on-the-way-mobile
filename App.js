@@ -1,19 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, ScrollView,
-  StatusBar, SafeAreaView, RefreshControl, Modal
+  StatusBar, SafeAreaView, RefreshControl, Modal, PanResponder, Animated, Linking
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { SwipeListView } from 'react-native-swipe-list-view';
 
-const SUPABASE_URL = 'https://clqivishcuwlptoumdre.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNscWl2aXNoY3V3bHB0b3VtZHJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NjYzNTUsImV4cCI6MjA5MTQ0MjM1NX0.YAoevh3WNcKVpsj46f0lNFj3kRUmvp2g7FoUp9f1opI';
-const RAILWAY_URL = 'https://on-the-way-backend-production.up.railway.app';
+// SECURITY: Import input validation helper
+import * as validation from './input-validation-helper';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// SECURITY: Load configuration from environment variables
+// These should be set via .env file (development) or EAS secrets (production)
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const RAILWAY_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+// SECURITY: Validate that required environment variables are configured
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !RAILWAY_URL) {
+  console.error('ERROR: Required environment variables not configured');
+  console.error('SUPABASE_URL:', SUPABASE_URL ? 'SET' : 'MISSING');
+  console.error('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
+  console.error('RAILWAY_URL:', RAILWAY_URL ? 'SET' : 'MISSING');
+}
+
+const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '', {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
@@ -21,6 +34,49 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     detectSessionInUrl: false,
   },
 });
+
+// SECURITY: Helper function for authenticated API calls using JWT tokens
+async function makeAuthenticatedRequest(endpoint, method = 'GET', body = null) {
+  try {
+    // Get current session to retrieve JWT token
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session?.access_token) {
+      throw new Error('Not authenticated. Please login.');
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    };
+
+    const options = {
+      method,
+      headers,
+    };
+
+    if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
+      options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(`${RAILWAY_URL}${endpoint}`, options);
+
+    if (response.status === 401) {
+      // Token expired or invalid
+      throw new Error('Session expired. Please login again.');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API request failed:', error.message);
+    throw error;
+  }
+}
 
 const colors = {
   primary: '#10b981',
@@ -41,38 +97,45 @@ const statusColors = {
   'Available for Pickup': '#8b5cf6',
 };
 
-const carriers = [
-  {
-    id: 'usps',
-    name: '📮 USPS Informed Delivery',
-    steps: [
-      '1. Go to informeddelivery.usps.com',
-      '2. Sign up with your email',
-      '3. Go to Settings → Notifications',
-      '4. Enter your tracking email above'
-    ]
-  },
-  {
-    id: 'ups',
-    name: '📦 UPS My Choice',
-    steps: [
-      '1. Go to ups.com/mychoice',
-      '2. Create an account',
-      '3. Add your tracking email above',
-      '4. Enable delivery notifications'
-    ]
-  },
-  {
-    id: 'fedex',
-    name: '🚚 FedEx Delivery Manager',
-    steps: [
-      '1. Go to fedex.com/deliverymanager',
-      '2. Sign up for an account',
-      '3. Set notification email to your tracking email',
-      '4. Save preferences'
-    ]
-  }
-];
+// Carrier registration instructions. Returns the list with the user's
+// personal tracking email interpolated so each user sees the address
+// they're actually supposed to register with each carrier. Falls back
+// to the generic inbox if the profile hasn't loaded yet.
+const getCarriers = (trackingEmail) => {
+  const email = trackingEmail || 'packages@onthewayapp.net';
+  return [
+    {
+      id: 'usps',
+      name: '📮 USPS Informed Delivery',
+      steps: [
+        '1. Go to informeddelivery.usps.com',
+        '2. Sign up with your email',
+        '3. Go to Settings → Notifications',
+        `4. Forward to: ${email}`
+      ]
+    },
+    {
+      id: 'ups',
+      name: '📦 UPS My Choice',
+      steps: [
+        '1. Go to ups.com/mychoice',
+        '2. Create an account',
+        `3. Set notification email to: ${email}`,
+        '4. Enable delivery notifications'
+      ]
+    },
+    {
+      id: 'fedex',
+      name: '🚚 FedEx Delivery Manager',
+      steps: [
+        '1. Go to fedex.com/deliverymanager',
+        '2. Sign up for an account',
+        `3. Set notification email to: ${email}`,
+        '4. Save preferences'
+      ]
+    }
+  ];
+};
 
 function HousePathLogo({ size = 56 }) {
   return (
@@ -96,6 +159,83 @@ function Checkbox({ checked, onPress }) {
   );
 }
 
+function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArchived = false, isDeleted = false }) {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: Animated.event([null, { dx: pan.x }], { useNativeDriver: false }),
+      onPanResponderRelease: (e, { dx }) => {
+        const SWIPE_THRESHOLD = 80;
+
+        if (dx > SWIPE_THRESHOLD) {
+          // Swiped right
+          onSwipeRight();
+        } else if (dx < -SWIPE_THRESHOLD) {
+          // Swiped left
+          onSwipeLeft();
+        }
+
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
+
+  let rightLabel = 'DELETE';
+  let rightActionStyle = styles.backActionDelete;
+  if (isDeleted) {
+    rightLabel = 'DELETE FOREVER';
+    rightActionStyle = styles.backActionDeleteForever;
+  }
+
+  return (
+    <View style={{ marginHorizontal: 12, marginVertical: 6 }}>
+      <View style={styles.rowBack}>
+        <View style={styles.backActionArchive}>
+          <Text style={styles.arrowText}>→</Text>
+          <Text style={styles.backActionLabel}>{isDeleted ? 'RESTORE' : isArchived ? 'RESTORE' : 'ARCHIVE'}</Text>
+        </View>
+        <View style={rightActionStyle}>
+          <Text style={styles.backActionLabel}>{rightLabel}</Text>
+          <Text style={styles.arrowText}>←</Text>
+        </View>
+      </View>
+      <Animated.View
+        style={[{ transform: [{ translateX: pan.x }] }]}
+        {...panResponder.panHandlers}
+      >
+        <TouchableOpacity
+          style={styles.packageCard}
+          onPress={onPress}
+          activeOpacity={0.7}
+        >
+          <View style={styles.packageLeft}>
+            <Text style={styles.packageMerchant}>{item.nickname || item.merchant}</Text>
+            <View style={styles.packageMeta}>
+              <Text style={styles.packageCarrier}>{item.carrier}</Text>
+              <View style={[styles.statusDot, { backgroundColor: statusColors[item.status] || colors.textMuted }]} />
+            </View>
+            {item.tracking_number && <Text style={styles.trackingNumberText}>#{item.tracking_number}</Text>}
+            {item.note ? (
+              <Text style={styles.notePreview} numberOfLines={1}>Note: {item.note}</Text>
+            ) : null}
+          </View>
+          {item.estimated_delivery && (
+            <View style={styles.deliveryBadge}>
+              <Text style={styles.deliveryBadgeLabel}>ETA</Text>
+              <Text style={styles.deliveryBadgeDate}>{item.estimated_delivery}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState('loading');
   const [user, setUser] = useState(null);
@@ -110,8 +250,17 @@ export default function App() {
   const [completedCarriers, setCompletedCarriers] = useState([]);
   const [activeTab, setActiveTab] = useState('home');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [showPermanentDeleteConfirm, setShowPermanentDeleteConfirm] = useState(null);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
 
   useEffect(() => { checkSession(); }, []);
+
+  useEffect(() => {
+    if (activeTab === 'home' && user?.id) {
+      autoArchiveExpiredPackages();
+    }
+  }, [activeTab, user?.id]);
 
   async function checkSession() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -122,7 +271,10 @@ export default function App() {
       const completed = await AsyncStorage.getItem('completedCarriers');
       if (completed) setCompletedCarriers(JSON.parse(completed));
       setScreen('home');
-      fetchPackages(session.user.id);
+      // Add small delay to ensure session is fully available before fetching packages
+      setTimeout(() => {
+        fetchPackages(session.user.id);
+      }, 100);
     } else {
       setScreen('auth');
     }
@@ -130,10 +282,8 @@ export default function App() {
 
   async function fetchUserProfile(userId) {
     try {
-      const res = await fetch(RAILWAY_URL + '/api/auth/profile', {
-        headers: { 'x-user-id': userId },
-      });
-      const data = await res.json();
+      // SECURITY: Use JWT authentication instead of X-User-ID
+      const data = await makeAuthenticatedRequest('/api/auth/profile', 'GET');
       return data.tracking_email;
     } catch (err) {
       console.error('Fetch profile error:', err);
@@ -156,15 +306,29 @@ export default function App() {
     if (!email || !password) { Alert.alert('Error', 'Please enter your email and password'); return; }
     setLoading(true);
     try {
+      // SECURITY: Validate email and password format
+      const validatedEmail = validation.validateEmail(email);
+      const passwordValidation = validation.validatePassword(password);
+
+      if (!passwordValidation.isValid) {
+        Alert.alert('Password Error', passwordValidation.errors.join('\n'));
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch(RAILWAY_URL + '/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, address }),
+        body: JSON.stringify({ email: validatedEmail, password, address }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+
+      // SECURITY: Clear old AsyncStorage data to prevent conflicts with new JWT authentication
+      await AsyncStorage.removeItem('SUPABASE_SESSION');
+
       setUser(authData.user);
       const trackingEmail = await fetchUserProfile(authData.user.id);
       if (trackingEmail) setUser(prev => ({ ...prev, trackingEmail }));
@@ -181,6 +345,10 @@ export default function App() {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+
+      // SECURITY: Clear old AsyncStorage data to prevent conflicts with new JWT authentication
+      await AsyncStorage.removeItem('SUPABASE_SESSION');
+
       setUser(data.user);
       const trackingEmail = await fetchUserProfile(data.user.id);
       if (trackingEmail) setUser(prev => ({ ...prev, trackingEmail }));
@@ -193,6 +361,37 @@ export default function App() {
     } finally { setLoading(false); }
   }
 
+  async function handleForgotPassword() {
+    if (!email) {
+      Alert.alert('Email required', 'Enter the email address you signed up with, then tap "Forgot password?" again.');
+      return;
+    }
+    let validatedEmail;
+    try {
+      validatedEmail = validation.validateEmail(email);
+    } catch (err) {
+      Alert.alert('Invalid email', err.message || 'Please enter a valid email address.');
+      return;
+    }
+    setResetSending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(validatedEmail);
+      if (error) throw error;
+      Alert.alert(
+        'Check your email',
+        `If an account exists for ${validatedEmail}, a password reset link is on its way. Open the link from your phone to set a new password, then come back here to log in.`
+      );
+    } catch (err) {
+      // Don't leak whether the email exists; show a generic success-style message
+      Alert.alert(
+        'Check your email',
+        `If an account exists for ${validatedEmail}, a password reset link is on its way.`
+      );
+    } finally {
+      setResetSending(false);
+    }
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setUser(null);
@@ -203,12 +402,15 @@ export default function App() {
 
   async function fetchPackages(userId) {
     try {
-      const res = await fetch(RAILWAY_URL + '/api/packages', {
-        headers: { 'x-user-id': userId || user?.id },
-      });
-      const data = await res.json();
+      // SECURITY: Use JWT authentication instead of X-User-ID header
+      const data = await makeAuthenticatedRequest('/api/packages', 'GET');
       setPackages(Array.isArray(data) ? data : []);
-    } catch (err) { console.error('Fetch packages error:', err); }
+    } catch (err) {
+      console.error('Fetch packages error:', err);
+      if (err.message.includes('not authenticated')) {
+        Alert.alert('Session Expired', 'Please login again.');
+      }
+    }
   }
 
   async function onRefresh() {
@@ -219,45 +421,184 @@ export default function App() {
 
   async function updateNickname(pkg, nickname) {
     try {
-      await fetch(RAILWAY_URL + '/api/packages/' + pkg.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
-        body: JSON.stringify({ nickname }),
-      });
+      // SECURITY: Validate nickname before sending
+      const validatedNickname = validation.validateNickname(nickname);
+
+      // SECURITY: Use JWT authentication
+      await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { nickname: validatedNickname }
+      );
       fetchPackages(user.id);
-    } catch (err) { console.error('Update error:', err); }
+    } catch (err) {
+      console.error('Update error:', err);
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  async function updateNote(pkg, note) {
+    try {
+      // Client-side validation: max 280 chars, strip control chars
+      const cleaned = (note || '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        .trim();
+      if (cleaned.length > 280) {
+        Alert.alert('Error', 'Note too long (maximum 280 characters)');
+        return;
+      }
+      // Skip if unchanged
+      if ((pkg.note || '') === cleaned) return;
+      // SECURITY: Use JWT authentication
+      await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { note: cleaned }
+      );
+      fetchPackages(user.id);
+    } catch (err) {
+      console.error('Update note error:', err);
+      Alert.alert('Error', err.message);
+    }
   }
 
   async function archivePackage(pkg) {
     try {
-      await fetch(RAILWAY_URL + '/api/packages/' + pkg.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
-        body: JSON.stringify({ archived: true }),
-      });
+      // SECURITY: Use JWT authentication
+      await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { archived: true }
+      );
       fetchPackages(user.id);
-    } catch (err) { console.error('Archive error:', err); }
+    } catch (err) {
+      console.error('Archive error:', err);
+      Alert.alert('Error', err.message);
+    }
   }
 
   async function unarchivePackage(pkg) {
     try {
-      await fetch(RAILWAY_URL + '/api/packages/' + pkg.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
-        body: JSON.stringify({ archived: false }),
-      });
+      // SECURITY: Use JWT authentication
+      await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { archived: false }
+      );
       fetchPackages(user.id);
-    } catch (err) { console.error('Unarchive error:', err); }
+    } catch (err) {
+      console.error('Unarchive error:', err);
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  async function moveToDeleted(pkg) {
+    try {
+      // SECURITY: Use JWT authentication
+      const data = await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { deleted: true }
+      );
+      console.log('Move to deleted response:', data);
+      fetchPackages(user.id);
+    } catch (err) {
+      console.error('Move to deleted error:', err);
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  async function restoreFromDeleted(pkg) {
+    try {
+      // SECURITY: Use JWT authentication
+      const data = await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { deleted: false }
+      );
+      console.log('Restore from deleted response:', data);
+      fetchPackages(user.id);
+    } catch (err) {
+      console.error('Restore from deleted error:', err);
+      Alert.alert('Error', err.message);
+    }
   }
 
   async function deletePackage(pkg) {
     try {
-      await fetch(RAILWAY_URL + '/api/packages/' + pkg.id, {
-        method: 'DELETE',
-        headers: { 'x-user-id': user.id },
-      });
+      // SECURITY: Use JWT authentication
+      await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'DELETE'
+      );
       fetchPackages(user.id);
-    } catch (err) { console.error('Delete error:', err); }
+    } catch (err) {
+      console.error('Delete error:', err);
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  function isDeliveryDatePassed(dateStr) {
+    if (!dateStr) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Try parsing common date formats
+    const lowerStr = dateStr.toLowerCase().trim();
+
+    // Format: "Wednesday, April 1, 2026"
+    const match1 = dateStr.match(/(\w+),\s+(\w+)\s+(\d+),\s+(\d{4})/);
+    if (match1) {
+      const deliveryDate = new Date(match1[2] + ' ' + match1[3] + ', ' + match1[4]);
+      deliveryDate.setHours(0, 0, 0, 0);
+      return deliveryDate < today;
+    }
+
+    // Format: "Wed 4/08/2026"
+    const match2 = dateStr.match(/\d+\/\d+\/\d{4}/);
+    if (match2) {
+      const deliveryDate = new Date(match2[0]);
+      deliveryDate.setHours(0, 0, 0, 0);
+      return deliveryDate < today;
+    }
+
+    // Format: "Tuesday 03/31/2026"
+    const match3 = dateStr.match(/(\w+)\s+(\d+)\/(\d+)\/(\d{4})/);
+    if (match3) {
+      const deliveryDate = new Date(match3[2] + '/' + match3[3] + '/' + match3[4]);
+      deliveryDate.setHours(0, 0, 0, 0);
+      return deliveryDate < today;
+    }
+
+    return false;
+  }
+
+  async function autoArchiveExpiredPackages() {
+    if (!user?.id) return;
+
+    const toArchive = packages.filter(p =>
+      !p.archived &&
+      p.estimated_delivery &&
+      isDeliveryDatePassed(p.estimated_delivery)
+    );
+
+    for (const pkg of toArchive) {
+      try {
+        // SECURITY: Use JWT authentication
+        await makeAuthenticatedRequest(
+          `/api/packages/${pkg.id}`,
+          'PATCH',
+          { archived: true }
+        );
+      } catch (err) {
+        console.error('Auto-archive error:', err);
+      }
+    }
+
+    if (toArchive.length > 0) {
+      await fetchPackages(user.id);
+    }
   }
 
   function extractMonth(dateStr) {
@@ -270,8 +611,15 @@ export default function App() {
     return lower;
   }
 
-  function deduplicatePackages(pkgs, includeArchived = false) {
-    const filtered = pkgs.filter(p => includeArchived ? p.archived : !p.archived);
+  function deduplicatePackages(pkgs, state = 'active') {
+    let filtered;
+    if (state === 'active') {
+      filtered = pkgs.filter(p => !p.archived && !p.deleted && p.tracking_number);
+    } else if (state === 'archive') {
+      filtered = pkgs.filter(p => p.archived && !p.deleted && p.tracking_number);
+    } else if (state === 'deleted') {
+      filtered = pkgs.filter(p => p.deleted && p.tracking_number);
+    }
     const seen = {};
 
     filtered.forEach(pkg => {
@@ -415,8 +763,50 @@ export default function App() {
             <TouchableOpacity style={styles.button} onPress={authMode === 'login' ? handleLogin : handleSignUp} disabled={loading}>
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{authMode === 'login' ? 'Log In' : 'Create Account'}</Text>}
             </TouchableOpacity>
+            {authMode === 'login' && (
+              <View style={styles.authHelpRow}>
+                <TouchableOpacity onPress={handleForgotPassword} disabled={resetSending}>
+                  <Text style={styles.authLinkText}>
+                    {resetSending ? 'Sending...' : 'Forgot password?'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setHelpModalVisible(true)}>
+                  <Text style={styles.authLinkSubtle}>Trouble signing in?</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </ScrollView>
+        <Modal
+          visible={helpModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setHelpModalVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.helpModalCard}>
+              <Text style={styles.helpModalTitle}>Trouble signing in?</Text>
+              <Text style={styles.helpModalBody}>
+                On the Way uses your email address as your login. If you don't remember which email you signed up with, search your inbox for a welcome message from On the Way.
+              </Text>
+              <Text style={styles.helpModalBody}>
+                Still stuck? Contact support and we'll help you get back in.
+              </Text>
+              <TouchableOpacity
+                style={styles.helpModalLinkButton}
+                onPress={() => Linking.openURL('mailto:support@onthewayapp.net?subject=Trouble%20signing%20in')}
+              >
+                <Text style={styles.helpModalLinkText}>support@onthewayapp.net</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.helpModalCloseButton}
+                onPress={() => setHelpModalVisible(false)}
+              >
+                <Text style={styles.helpModalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -458,6 +848,18 @@ export default function App() {
             <Text style={styles.detailLabel}>Add a Label</Text>
             <TextInput style={styles.input} placeholder="e.g. Birthday gift, New shoes..." placeholderTextColor={colors.textMuted} defaultValue={pkg.nickname || ''} onEndEditing={(e) => updateNickname(pkg, e.nativeEvent.text)} />
           </View>
+          <View style={styles.card}>
+            <Text style={styles.detailLabel}>Note:</Text>
+            <TextInput
+              key={`note-${pkg.id}-${pkg.note || ''}`}
+              style={styles.input}
+              placeholder="Add a note..."
+              placeholderTextColor={colors.textMuted}
+              defaultValue={pkg.note || ''}
+              maxLength={280}
+              onEndEditing={(e) => updateNote(pkg, e.nativeEvent.text)}
+            />
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -484,7 +886,7 @@ export default function App() {
           )}
           <View style={styles.carrierSection}>
             <Text style={styles.carrierTitle}>Registration Instructions</Text>
-            {carriers.map(carrier => (
+            {getCarriers(user?.trackingEmail).map(carrier => (
               <View key={carrier.id} style={styles.carrierCard}>
                 <Text style={styles.carrierName}>{carrier.name}</Text>
                 {carrier.steps.map((step, idx) => (
@@ -532,8 +934,9 @@ export default function App() {
     );
   }
 
-  const activePackages = deduplicatePackages(packages, false);
-  const archivedPackages = deduplicatePackages(packages, true);
+  const activePackages = deduplicatePackages(packages, 'active');
+  const archivedPackages = deduplicatePackages(packages, 'archive');
+  const deletedPackages = deduplicatePackages(packages, 'deleted');
 
   return (
     <>
@@ -550,21 +953,27 @@ export default function App() {
         </View>
 
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tab, activeTab === 'home' && styles.tabActive]}
             onPress={() => setActiveTab('home')}
           >
-            <Text style={[styles.tabText, activeTab === 'home' && styles.tabTextActive]}>Active</Text>
+            <Text style={[styles.tabText, activeTab === 'home' && styles.tabTextActive]}>Active ({activePackages.length})</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tab, activeTab === 'archive' && styles.tabActive]}
             onPress={() => setActiveTab('archive')}
           >
             <Text style={[styles.tabText, activeTab === 'archive' && styles.tabTextActive]}>Archive ({archivedPackages.length})</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'deleted' && styles.tabActive]}
+            onPress={() => setActiveTab('deleted')}
+          >
+            <Text style={[styles.tabText, activeTab === 'deleted' && styles.tabTextActive]}>Deleted ({deletedPackages.length})</Text>
+          </TouchableOpacity>
         </View>
 
-        {activeTab === 'home' ? (
+        {activeTab === 'home' && (
           activePackages.length === 0 ? (
             <ScrollView style={styles.emptyStateScroll}>
               <View style={styles.emptyContent}>
@@ -581,14 +990,14 @@ export default function App() {
 
                 <View style={styles.carrierSection}>
                   <Text style={styles.carrierTitle}>Pending Registration</Text>
-                  {carriers.filter(c => !completedCarriers.includes(c.id)).map(carrier => (
+                  {getCarriers(user?.trackingEmail).filter(c => !completedCarriers.includes(c.id)).map(carrier => (
                     <View key={carrier.id} style={styles.carrierCheckCard}>
                       <View style={styles.carrierCheckRow}>
                         <View style={styles.carrierCheckContent}>
                           <Text style={styles.carrierName}>{carrier.name}</Text>
                         </View>
-                        <Checkbox 
-                          checked={completedCarriers.includes(carrier.id)} 
+                        <Checkbox
+                          checked={completedCarriers.includes(carrier.id)}
                           onPress={() => toggleCarrierComplete(carrier.id)}
                         />
                       </View>
@@ -602,7 +1011,7 @@ export default function App() {
                 {completedCarriers.length > 0 && (
                   <View style={styles.registeredSection}>
                     <Text style={styles.registeredTitle}>✓ Registered Carriers</Text>
-                    {carriers.filter(c => completedCarriers.includes(c.id)).map(carrier => (
+                    {getCarriers(user?.trackingEmail).filter(c => completedCarriers.includes(c.id)).map(carrier => (
                       <View key={carrier.id} style={styles.registeredCarrier}>
                         <Text style={styles.registeredCarrierName}>{carrier.name}</Text>
                         <TouchableOpacity onPress={() => toggleCarrierComplete(carrier.id)}>
@@ -619,37 +1028,22 @@ export default function App() {
               data={activePackages}
               keyExtractor={item => item.id}
               renderItem={({ item }) => (
-                <PackageCard
+                <SwipeablePackageCard
                   item={item}
                   onPress={() => { setSelectedPackage(item); setScreen('detail'); }}
+                  onSwipeRight={() => archivePackage(item)}
+                  onSwipeLeft={() => moveToDeleted(item)}
+                  isArchived={false}
                 />
               )}
-              renderHiddenItem={({ item }) => (
-                <HiddenActionsHome
-                  item={item}
-                  onDelete={() => deletePackage(item)}
-                  onArchive={() => archivePackage(item)}
-                />
-              )}
-              leftOpenValue={75}
-              rightOpenValue={-75}
-              swipeToOpenPercent={10}
-              swipeToClosePercent={10}
+              renderHiddenItem={() => null}
               contentContainerStyle={{ paddingBottom: 24 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-              friction={2}
-              tension={40}
-              directionalDistanceChangeThreshold={2}
+              scrollEnabled={true}
               disableLeftSwipe={false}
               disableRightSwipe={false}
-              onRowOpen={(rowKey, rowMap, direction) => {
-                const pkg = activePackages.find(p => p.id === rowKey);
-                if (pkg && direction === 'right') archivePackage(pkg);
-                if (pkg && direction === 'left') deletePackage(pkg);
-                if (rowMap[rowKey]) rowMap[rowKey].closeRow();
-              }}
               ListFooterComponent={() => {
-                const pendingCarriers = carriers.filter(c => !completedCarriers.includes(c.id));
+                const pendingCarriers = getCarriers(user?.trackingEmail).filter(c => !completedCarriers.includes(c.id));
                 return pendingCarriers.length > 0 ? (
                   <View style={styles.pendingCarriersSection}>
                     <Text style={styles.carrierTitle}>Pending Registration</Text>
@@ -674,7 +1068,8 @@ export default function App() {
               }}
             />
           )
-        ) : (
+        )}
+        {activeTab === 'archive' && (
           archivedPackages.length === 0 ? (
             <View style={[styles.container, styles.center]}>
               <Text style={styles.emptyTitle}>No archived packages</Text>
@@ -684,35 +1079,48 @@ export default function App() {
               data={archivedPackages}
               keyExtractor={item => item.id}
               renderItem={({ item }) => (
-                <PackageCard 
+                <SwipeablePackageCard
                   item={item}
                   onPress={() => { setSelectedPackage(item); setScreen('detail'); }}
+                  onSwipeRight={() => unarchivePackage(item)}
+                  onSwipeLeft={() => moveToDeleted(item)}
+                  isArchived={true}
                 />
               )}
-              renderHiddenItem={({ item }) => (
-                <HiddenActionsArchive 
-                  item={item}
-                  onDelete={() => deletePackage(item)}
-                  onUnarchive={() => unarchivePackage(item)}
-                />
-              )}
-              leftOpenValue={75}
-              rightOpenValue={-75}
-              swipeToOpenPercent={10}
-              swipeToClosePercent={10}
+              renderHiddenItem={() => null}
               contentContainerStyle={{ paddingBottom: 24 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-              friction={2}
-              tension={40}
-              directionalDistanceChangeThreshold={2}
+              scrollEnabled={true}
               disableLeftSwipe={false}
               disableRightSwipe={false}
-              onRowOpen={(rowKey, rowMap, direction) => {
-                const pkg = archivedPackages.find(p => p.id === rowKey);
-                if (pkg && direction === 'right') unarchivePackage(pkg);
-                if (pkg && direction === 'left') deletePackage(pkg);
-                if (rowMap[rowKey]) rowMap[rowKey].closeRow();
-              }}
+            />
+          )
+        )}
+        {activeTab === 'deleted' && (
+          deletedPackages.length === 0 ? (
+            <View style={[styles.container, styles.center]}>
+              <Text style={styles.emptyTitle}>No deleted packages</Text>
+            </View>
+          ) : (
+            <SwipeListView
+              data={deletedPackages}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => (
+                <SwipeablePackageCard
+                  item={item}
+                  onPress={() => { setSelectedPackage(item); setScreen('detail'); }}
+                  onSwipeRight={() => restoreFromDeleted(item)}
+                  onSwipeLeft={() => setShowPermanentDeleteConfirm(item)}
+                  isArchived={false}
+                  isDeleted={true}
+                />
+              )}
+              renderHiddenItem={() => null}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+              scrollEnabled={true}
+              disableLeftSwipe={false}
+              disableRightSwipe={false}
             />
           )
         )}
@@ -730,20 +1138,53 @@ export default function App() {
               <Text style={styles.modalTitle}>Delete package?</Text>
               <Text style={styles.modalText}>This action cannot be undone.</Text>
               <View style={styles.modalButtons}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.modalButtonCancel]} 
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
                   onPress={() => setShowDeleteConfirm(null)}
                 >
                   <Text style={styles.modalButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.modalButtonDelete]} 
-                  onPress={() => { 
-                    deletePackage(showDeleteConfirm); 
-                    setShowDeleteConfirm(null); 
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonDelete]}
+                  onPress={() => {
+                    deletePackage(showDeleteConfirm);
+                    setShowDeleteConfirm(null);
                   }}
                 >
                   <Text style={[styles.modalButtonText, { color: colors.error }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {showPermanentDeleteConfirm && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowPermanentDeleteConfirm(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Delete forever?</Text>
+              <Text style={styles.modalText}>This package will be permanently deleted and cannot be restored.</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowPermanentDeleteConfirm(null)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonDelete]}
+                  onPress={() => {
+                    deletePackage(showPermanentDeleteConfirm);
+                    setShowPermanentDeleteConfirm(null);
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: colors.error }]}>Delete Forever</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -757,7 +1198,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerLogoContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerLogoText: { color: colors.text, fontSize: 18, fontWeight: '600' },
   settingsIcon: { fontSize: 24 },
@@ -775,6 +1216,18 @@ const styles = StyleSheet.create({
   packageMerchant: { fontSize: 16, fontWeight: '600', color: colors.text },
   packageCarrier: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   trackingNumberText: { fontSize: 11, color: colors.textMuted, marginTop: 2, fontFamily: 'monospace' },
+  notePreview: { fontSize: 12, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  authHelpRow: { marginTop: 16, alignItems: 'center', gap: 10 },
+  authLinkText: { color: colors.primary, fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  authLinkSubtle: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  helpModalCard: { backgroundColor: colors.card, borderRadius: 12, padding: 24, width: '100%', maxWidth: 380 },
+  helpModalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  helpModalBody: { fontSize: 14, color: colors.text, lineHeight: 20, marginBottom: 12 },
+  helpModalLinkButton: { paddingVertical: 10, alignItems: 'center', marginBottom: 8 },
+  helpModalLinkText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+  helpModalCloseButton: { paddingVertical: 12, alignItems: 'center', marginTop: 4, borderTopWidth: 1, borderTopColor: colors.border || '#eee' },
+  helpModalCloseText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
   packageMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   deliveryBadge: { backgroundColor: colors.primary + '22', borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
   deliveryBadgeLabel: { fontSize: 10, color: colors.primary, fontWeight: '700', letterSpacing: 1 },
@@ -782,6 +1235,7 @@ const styles = StyleSheet.create({
   statusDot: { width: 12, height: 12, borderRadius: 6 },
   rowBack: { flexDirection: 'row', flex: 1, marginHorizontal: 12, marginVertical: 6, borderRadius: 8, overflow: 'hidden' },
   backActionDelete: { backgroundColor: colors.error, flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
+  backActionDeleteForever: { backgroundColor: '#991b1b', flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
   backActionArchive: { backgroundColor: colors.primary, flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
   backActionLabel: { color: '#fff', fontWeight: '600', fontSize: 13 },
   arrowText: { color: '#fff', fontSize: 18 },
