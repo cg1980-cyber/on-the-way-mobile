@@ -2,7 +2,13 @@
 
 _Last updated: 2026-05-18_
 
-This file is the single source of truth for what this project is, where its pieces live, and what's outstanding. Update it at every milestone — don't let it go stale. If a future session of Claude is helping on this project, this file should be the first thing read.
+> **Claude: read this file first, every session, before doing anything else.** It's the only continuity layer between sessions. The full chat transcripts in `/sessions/.../.claude/projects/` are the raw record, but this curated summary is what gets you back up to speed fastest.
+>
+> **Keep it updated as you work** — don't wait for the user to ask. Append to "Session log" whenever you reach a meaningful milestone (resolved issue, decision made, change shipped, new direction chosen). Refresh "Where we left off" at the end of each session, or any time you're about to be context-consolidated. If you can feel the context window filling up mid-task, that is the cue to write to this file before continuing.
+>
+> Commit and push the file at the end of each session so it travels with the repo on GitHub. The user runs the commit from their own terminal (sandbox can't always remove `.git/index.lock` itself).
+
+This file is the single source of truth for what this project is, where its pieces live, and what's outstanding.
 
 ---
 
@@ -190,6 +196,24 @@ Full chat transcripts auto-saved by Claude live in the sandbox at:
 `/sessions/.../.claude/projects/...`
 
 If a future session needs to recover a specific past detail (exact code we wrote, error messages, alternative approaches we considered), Claude can read those JSONL transcripts. This file is the curated summary; the JSONL is the raw record.
+
+---
+
+## Session log
+
+Append-only running record of meaningful events. Newest at the top. One line per event when possible; multi-line only when context is genuinely needed for recovery.
+
+### 2026-05-18
+- Confirmed the JWT-auth fix from the previous session was committed (`72cc824`) and shipped via EAS update.
+- Discovered local `App.js` had drifted to a stale shorter version (851 lines vs 1299 committed) — restored from HEAD with `git show HEAD:App.js > /tmp/x && cat /tmp/x > App.js`.
+- Built static password reset page at `docs/reset.html` (commit `8b03f61`); enabled GitHub Pages on the repo (main branch `/docs` folder); updated Supabase Auth → URL Configuration Site URL + Redirect URLs to `https://cg1980-cyber.github.io/on-the-way-mobile/reset.html`. Verified end-to-end.
+- Diagnosed why app still showed Active(0) after the JWT fix: Railway trial had expired, backend service was offline (`X-Railway-Fallback:true`, `Application not found`). Upgraded Railway to Hobby plan ($5/mo). Service came back at the same URL — no app-side config change needed.
+- After backend came back online, app still showed Active(0). Root cause: `deduplicatePackages` in `App.js` was filtering on `&& p.tracking_number`, dropping all rows whose tracking number the email parser hadn't extracted (which was most of them). Relaxed the filter (commit `62debd9`), shipped via EAS update. Active now shows 5 cards.
+- Committed and pushed PROJECT_STATE.md update (`ae862c3`).
+- Added this "Session log" + "read first, update as you go" convention to the doc itself so future sessions follow the same pattern.
+
+### Pre-2026-05-18
+For all events prior to this session, see the task list (`#1`–`#43` in Claude's TaskList tool) and the JSONL transcripts under `/sessions/.../.claude/projects/`. The current state of the project as of 2026-05-18 captures everything that resulted from those earlier sessions.
 
 ---
 
