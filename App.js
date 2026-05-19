@@ -614,11 +614,11 @@ export default function App() {
   function deduplicatePackages(pkgs, state = 'active') {
     let filtered;
     if (state === 'active') {
-      filtered = pkgs.filter(p => !p.archived && !p.deleted && p.tracking_number);
+      filtered = pkgs.filter(p => !p.archived && !p.deleted);
     } else if (state === 'archive') {
-      filtered = pkgs.filter(p => p.archived && !p.deleted && p.tracking_number);
+      filtered = pkgs.filter(p => p.archived && !p.deleted);
     } else if (state === 'deleted') {
-      filtered = pkgs.filter(p => p.deleted && p.tracking_number);
+      filtered = pkgs.filter(p => p.deleted);
     }
     const seen = {};
 
