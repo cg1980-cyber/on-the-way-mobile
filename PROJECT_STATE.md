@@ -207,6 +207,13 @@ If a future session needs to recover a specific past detail (exact code we wrote
 
 Append-only running record of meaningful events. Newest at the top. One line per event when possible; multi-line only when context is genuinely needed for recovery.
 
+### 2026-05-23 (later)
+- Moved to a visual-changes swimlane. Cliff asked: tapping a package card should open an editable detail screen with three fields ("What it is" / "Who it came from" / "Reference Note") that work for Active and Archived packages; the Deleted detail screen should show a note that edits require restoring first.
+- Backend: added `merchant` to the destructure and update payload in `PATCH /api/packages/:id`. Committed via GitHub web editor (driven by Claude-in-Chrome MCP) as `e085e06`. Note for next time: the local `on-the-way-backend` clone on Cliff's machine is now one commit behind remote — `git pull` before any local edits.
+- Mobile (`App.js`): added `updateMerchant()` helper. Detail screen replaced "Add a Label" with **"What it is"** (still writes `nickname`), added **"Who it came from"** input writing to `merchant`, renamed "Note:" → **"Reference Note"**. For deleted packages, edit cards are hidden behind a single banner card ("📦 Restore to edit. Swipe right on the card in the Deleted tab…") so the user can't accidentally edit data that's about to be purged.
+- After the OTA shipped, Cliff reported tapping a card did nothing (but swipe still worked). Diagnosis: pre-existing bug in `SwipeablePackageCard`'s internal `PanResponder` — `onStartShouldSetPanResponder: () => true` claimed every touch at the start, so the `TouchableOpacity` underneath never got its tap. Fix: claim the touch only once horizontal movement exceeds 5px AND is greater than vertical movement (lets vertical scroll through, lets taps fall through). Also fixed `rowBack` style which was missing `position: 'absolute'` — was rendering the green ARCHIVE / red DELETE bar in normal flow above each card instead of hiding it behind the card.
+- Shipped both as commit `8730343a` (initial detail-screen change) and a follow-up commit for the tap/layout fix, plus EAS updates to the preview branch. Cliff verified end-to-end on his phone — tap opens the detail screen with new editable fields, swipe still reveals (and acts on) the action bars, deleted package shows the restore-to-edit banner.
+
 ### 2026-05-23
 - Cloned the backend repo locally on Cliff's machine (`C:\Users\hicli\on-the-way-backend\`) and copied `emailParser.js` + `server.js` into the mobile repo's `_backend_review/` folder so the sandbox could read them.
 - Diagnosed root cause of the Active(0)/junk-row issue as a compound: (a) snake_case/camelCase field-name mismatch in `server.js` was discarding every parsed `tracking_number` and `estimated_delivery` value the parser produced, (b) carrier detection in `emailParser.js` used loose substring matching (`content.includes('ups')`) that misclassified any email containing the word `groups`/`setups`/`support` as a UPS shipment.
@@ -230,17 +237,21 @@ For all events prior to this session, see the task list (`#1`–`#43` in Claude'
 
 ---
 
-## Where we left off (2026-05-23)
+## Where we left off (2026-05-23, end of session)
 
-Backend parser is shipped and Supabase is cleaned up. Final per-user counts in Supabase: **active=4, archived=10, deleted=1, total=15**. The 4 active rows are the legitimate-looking shipments (have either a real tracking number or a real merchant name); the 10 archived are the junk rows from before the fix.
+Email parser, junk-row cleanup, AND the first round of visual edits are all shipped and verified on Cliff's phone. Confirmed working end-to-end:
 
-**Two verification steps still outstanding** (low-risk, just confirmation):
+- Detail screen has three editable fields for Active/Archived packages ("What it is" → nickname, "Who it came from" → merchant, "Reference Note" → note). Backend PATCH endpoint accepts the merchant field.
+- Deleted detail screen shows a restore-to-edit banner instead of the edit fields.
+- Tap on a card opens the detail screen (was broken pre-existing, fixed in this session).
+- Swipe gestures still work — green ARCHIVE / red DELETE actions now sit behind the card and reveal on swipe instead of stacking on top of the list.
 
-1. **Mobile app sanity check.** Force-close + reopen the app on Cliff's phone. Active should drop from 5 cards to roughly 4 (or fewer after frontend dedup), and every visible card should look like a real shipment.
-2. **End-to-end parser test.** Forward a real shipping confirmation email (Amazon, Chewy, FedEx tracking update, etc.) from a Gmail/Yahoo inbox to the tracking address `cgiles1998.a940d0@onthewayapp.net`. Expected: a clean row appears in Supabase within ~20 seconds with a real merchant + tracking number, and the app shows it on next refresh. As a counter-test, forward something obviously non-shipping (a marketing email, a Google security alert); it should be silently ignored — no junk row created. Watch Railway logs for `Created new package …` vs `Ignoring non-shipping email …`.
+**Next likely directions for new sessions** (none in flight, pick any):
 
-If both pass, this thread is fully done and the app is in a clean working state. Production-readiness checklist below is the next swimlane (privacy policy, account deletion flow, AdMob, Play Store assets) — pre-launch polish, not blocking.
+1. **More visual polish** — tab styling, card layout tweaks, color/theme refinement, ETA badge styling, etc. Cliff is in a "visual changes" swimlane.
+2. **Pre-launch production readiness checklist** above — privacy policy, in-app account deletion, AdMob integration, Data Safety form, Play Console setup. None are blocking but all are needed before submitting to Play Store.
+3. **Architectural cleanup** (low priority): SwipeListView in `App.js` is used with `renderHiddenItem={() => null}` while `SwipeablePackageCard` renders its own hidden-action layer via the internal PanResponder. The pattern works after today's fixes but is duplicative — could be simplified by either moving the hidden actions into SwipeListView's `renderHiddenItem` (and removing the internal PanResponder) or dropping SwipeListView for a plain FlatList.
 
-**Cosmetic cleanup, optional:** Supabase auto-named the inspect query "Find Packages Without Tracking Numbers" and saved it under PRIVATE (5). Delete from SQL Editor sidebar if you don't want it lingering.
+**Cosmetic cleanup (still optional):** "Find Packages Without Tracking Numbers" lingers as a saved query in Supabase SQL Editor's PRIVATE list. Delete it any time.
 
-**If anything regresses,** the SQL cleanup is reversible: `UPDATE packages SET archived = false WHERE archived = true AND last_updated >= '2026-05-23'` on the 10 rows we archived today.
+**If anything regresses,** the parser-cleanup SQL is reversible: `UPDATE packages SET archived = false WHERE archived = true AND last_updated >= '2026-05-23'` on the 10 rows archived today. The mobile-side edits can be rolled back by reverting the relevant commits in `cg1980-cyber/on-the-way-mobile` and republishing a previous EAS update (`eas update --branch preview --republish --group <previous-group-id>` — group IDs visible in the EAS dashboard).
