@@ -163,8 +163,14 @@ function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArch
   const pan = useRef(new Animated.ValueXY()).current;
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      // Don't claim the touch at the start — that would steal taps from the
+      // TouchableOpacity inside. Only claim once the user has actually moved
+      // horizontally beyond a small threshold (and is moving more horizontally
+      // than vertically, so vertical scrolls still work).
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (e, gestureState) =>
+        Math.abs(gestureState.dx) > 5 &&
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
       onPanResponderMove: Animated.event([null, { dx: pan.x }], { useNativeDriver: false }),
       onPanResponderRelease: (e, { dx }) => {
         const SWIPE_THRESHOLD = 80;
@@ -1288,7 +1294,7 @@ const styles = StyleSheet.create({
   deliveryBadgeLabel: { fontSize: 10, color: colors.primary, fontWeight: '700', letterSpacing: 1 },
   deliveryBadgeDate: { fontSize: 14, color: colors.primary, fontWeight: '700', marginTop: 2 },
   statusDot: { width: 12, height: 12, borderRadius: 6 },
-  rowBack: { flexDirection: 'row', flex: 1, marginHorizontal: 12, marginVertical: 6, borderRadius: 8, overflow: 'hidden' },
+  rowBack: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', borderRadius: 8, overflow: 'hidden' },
   backActionDelete: { backgroundColor: colors.error, flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
   backActionDeleteForever: { backgroundColor: '#991b1b', flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
   backActionArchive: { backgroundColor: colors.primary, flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
