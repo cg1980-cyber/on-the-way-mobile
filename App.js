@@ -437,6 +437,27 @@ export default function App() {
     }
   }
 
+  async function updateMerchant(pkg, merchant) {
+    try {
+      // Client-side sanitization: strip control chars, trim, cap length
+      const cleaned = (merchant || '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        .trim()
+        .slice(0, 120);
+      // Skip if unchanged
+      if ((pkg.merchant || '') === cleaned) return;
+      await makeAuthenticatedRequest(
+        `/api/packages/${pkg.id}`,
+        'PATCH',
+        { merchant: cleaned }
+      );
+      fetchPackages(user.id);
+    } catch (err) {
+      console.error('Update merchant error:', err);
+      Alert.alert('Error', err.message);
+    }
+  }
+
   async function updateNote(pkg, note) {
     try {
       // Client-side validation: max 280 chars, strip control chars
@@ -844,22 +865,54 @@ export default function App() {
             <Text style={styles.detailLabel}>Last Updated</Text>
             <Text style={styles.detailValue}>{new Date(pkg.last_updated).toLocaleString()}</Text>
           </View>
-          <View style={styles.card}>
-            <Text style={styles.detailLabel}>Add a Label</Text>
-            <TextInput style={styles.input} placeholder="e.g. Birthday gift, New shoes..." placeholderTextColor={colors.textMuted} defaultValue={pkg.nickname || ''} onEndEditing={(e) => updateNickname(pkg, e.nativeEvent.text)} />
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.detailLabel}>Note:</Text>
-            <TextInput
-              key={`note-${pkg.id}-${pkg.note || ''}`}
-              style={styles.input}
-              placeholder="Add a note..."
-              placeholderTextColor={colors.textMuted}
-              defaultValue={pkg.note || ''}
-              maxLength={280}
-              onEndEditing={(e) => updateNote(pkg, e.nativeEvent.text)}
-            />
-          </View>
+          {pkg.deleted ? (
+            <View style={styles.card}>
+              <Text style={styles.restoreToEditTitle}>📦 Restore to edit</Text>
+              <Text style={styles.restoreToEditBody}>
+                This package is in the Deleted list, so its details can't be edited.
+                Swipe right on the card in the Deleted tab to restore it, then come
+                back here to update what it is, who it came from, or its reference note.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.card}>
+                <Text style={styles.detailLabel}>What it is</Text>
+                <TextInput
+                  key={`nickname-${pkg.id}-${pkg.nickname || ''}`}
+                  style={styles.input}
+                  placeholder="e.g. Birthday gift, New shoes..."
+                  placeholderTextColor={colors.textMuted}
+                  defaultValue={pkg.nickname || ''}
+                  onEndEditing={(e) => updateNickname(pkg, e.nativeEvent.text)}
+                />
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.detailLabel}>Who it came from</Text>
+                <TextInput
+                  key={`merchant-${pkg.id}-${pkg.merchant || ''}`}
+                  style={styles.input}
+                  placeholder="e.g. Amazon, Chewy, Target..."
+                  placeholderTextColor={colors.textMuted}
+                  defaultValue={pkg.merchant || ''}
+                  maxLength={120}
+                  onEndEditing={(e) => updateMerchant(pkg, e.nativeEvent.text)}
+                />
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.detailLabel}>Reference Note</Text>
+                <TextInput
+                  key={`note-${pkg.id}-${pkg.note || ''}`}
+                  style={styles.input}
+                  placeholder="Add a note..."
+                  placeholderTextColor={colors.textMuted}
+                  defaultValue={pkg.note || ''}
+                  maxLength={280}
+                  onEndEditing={(e) => updateNote(pkg, e.nativeEvent.text)}
+                />
+              </View>
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -1217,6 +1270,8 @@ const styles = StyleSheet.create({
   packageCarrier: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   trackingNumberText: { fontSize: 11, color: colors.textMuted, marginTop: 2, fontFamily: 'monospace' },
   notePreview: { fontSize: 12, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  restoreToEditTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  restoreToEditBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   authHelpRow: { marginTop: 16, alignItems: 'center', gap: 10 },
   authLinkText: { color: colors.primary, fontSize: 14, fontWeight: '600', textAlign: 'center' },
   authLinkSubtle: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
