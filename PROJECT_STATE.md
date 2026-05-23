@@ -1,6 +1,6 @@
 # on-the-way — Project State
 
-_Last updated: 2026-05-18_
+_Last updated: 2026-05-23_
 
 > **Claude: read this file first, every session, before doing anything else.** It's the only continuity layer between sessions. The full chat transcripts in `/sessions/.../.claude/projects/` are the raw record, but this curated summary is what gets you back up to speed fastest.
 >
@@ -114,14 +114,18 @@ Columns include: `id`, `user_id`, `tracking_number`, `carrier`, `merchant`, `sta
 
 ## Open issues / outstanding investigations
 
-### 🚨 Email parser is creating low-quality / garbage rows (active investigation, deferred)
-- Inspected the Supabase `packages` table on 2026-05-18. Cliff's user (`e8496476-50e8-4add-bbf9-538f500ec54c`) has ~13 rows, but the data quality is poor:
-  - Most rows have `tracking_number = NULL`.
-  - Many rows have `merchant = "Gmail"` or `"Unknown Sender"` and `carrier = "Unknown"`.
-  - Only 2 rows have actual tracking numbers (`940015020621763821050…` and one other).
-- This means the backend's email-webhook parser is failing on most incoming emails — it's creating package records even when it can't extract real merchant / tracking / carrier data, and treating the From: line of generic Gmail messages as a merchant.
-- The post-fix mobile app dedups the 13 raw rows down to 5 visible cards in Active (grouped by carrier+month).
-- **Next step when we resume**: open the backend repo (`cg1980-cyber/on-the-way-backend`) and look at the email-webhook handler + `emailParser.js`. Two goals: (a) make the parser reject emails it can't classify instead of creating junk rows, (b) figure out why so many forwarded emails are getting attributed to "Gmail" as the merchant. Also clean up the existing junk rows in Supabase once parser is fixed.
+### ✅ RESOLVED 2026-05-23 — Email parser data quality
+Two compounding bugs, both shipped as commit `ef84aeb` on `cg1980-cyber/on-the-way-backend`:
+
+1. **Field-name mismatch in `server.js` (the smoking gun).** The webhook handler was reading `parsed.trackingNumber` and `parsed.estimatedDelivery`, but `emailParser.js` exports those fields as snake_case (`tracking_number`, `estimated_delivery`). Result: every insert wrote `NULL` for tracking and undefined for ETA, and the dedup-by-tracking-number check never matched anything — so each status-update email created a brand-new duplicate row. Fixed by switching the reads to snake_case.
+
+2. **Over-permissive carrier detection in `emailParser.js`.** The old code used `content.includes('ups')`, which matches the substring `ups` inside `groups`, `setups`, `support`, etc. — turning any random email containing those words into a "UPS shipment" with merchant captured from the next "from <X>" line in the body. Replaced with word-boundary regexes (`\bups\b`, `\busps\b`, `\bfedex\b`) plus carrier-specific phrase checks (`ups.com`, `usps.com`, UPS-shape `1Z…` tracking numbers, etc.).
+
+Also added in the same commit:
+- New `isShipping` flag returned by `parseCarrierEmail`. True only when we found a recognized carrier + a shipping keyword (or a tracking-number-shaped string). The webhook now returns `200 {message:'Not a shipping email, ignoring'}` and skips the insert when `isShipping === false`, so non-shipping email forwarded to the user's tracking address no longer creates junk rows.
+- Merchant blocklist (`gmail`, `yahoo`, `iphone`, `unknown sender`, etc.) so the parser never stores a generic mail-provider name as the merchant.
+
+**Cleanup pass on existing junk rows (2026-05-23):** ran the inspect query in Supabase, found 10 junk rows for Cliff's user (4 "Unknown Sender / USPS", 4 "Gmail / Unknown", 2 "Gmail / UPS"), all with `tracking_number IS NULL`. Archived all 10 via SQL `UPDATE packages SET archived = true WHERE …` (reversible — rows remain, just hidden from the Active tab). Final per-user counts: active=4, archived=10, deleted=1, total=15. SQL is preserved in `_backend_review/cleanup_junk_packages.sql` for future reference.
 
 ### ✅ RESOLVED 2026-05-18 — "Active(0) packages" issue
 Compound root cause, three layers:
@@ -160,7 +164,7 @@ Compound root cause, three layers:
 - [ ] **WEBHOOK_SECRET rotation plan** documented.
 - [x] **Password reset link works end-to-end** — done 2026-05-18 via GitHub Pages reset page + Supabase URL config update. See "RESOLVED" section above for details.
 - [x] **support@onthewayapp.net mailbox** — forwarding via Cloudflare Email Routing rule to `hicliff1980@gmail.com`.
-- [ ] **Backend email parser data quality** — see "active investigation" above. Pre-launch we want clean rows in the DB so the app looks good to first users.
+- [x] **Backend email parser data quality** — done 2026-05-23. Fixed snake_case/camelCase mismatch + tightened carrier detection + added `isShipping` gate to skip non-shipping emails. Existing junk rows archived in Supabase. See "RESOLVED" section above.
 
 ---
 
@@ -203,6 +207,15 @@ If a future session needs to recover a specific past detail (exact code we wrote
 
 Append-only running record of meaningful events. Newest at the top. One line per event when possible; multi-line only when context is genuinely needed for recovery.
 
+### 2026-05-23
+- Cloned the backend repo locally on Cliff's machine (`C:\Users\hicli\on-the-way-backend\`) and copied `emailParser.js` + `server.js` into the mobile repo's `_backend_review/` folder so the sandbox could read them.
+- Diagnosed root cause of the Active(0)/junk-row issue as a compound: (a) snake_case/camelCase field-name mismatch in `server.js` was discarding every parsed `tracking_number` and `estimated_delivery` value the parser produced, (b) carrier detection in `emailParser.js` used loose substring matching (`content.includes('ups')`) that misclassified any email containing the word `groups`/`setups`/`support` as a UPS shipment.
+- Rewrote `emailParser.js`: word-boundary carrier regex, merchant blocklist, new `isShipping` flag that's true only when we detected a real carrier + shipping keyword (or a tracking-number-shaped string). Edited `server.js` to fix the field names and to early-return `200 {ignoring}` when `isShipping === false`.
+- Shipped both fixes as commit `ef84aeb` on `cg1980-cyber/on-the-way-backend` (Railway auto-deployed).
+- Drove the cleanup SQL via the Claude-in-Chrome MCP on Supabase SQL Editor. Inspect query returned 10 junk rows for Cliff's user; archived all 10 via UPDATE. Verified per-user counts (active=4, archived=10, deleted=1, total=15).
+- PowerShell quirk encountered during the deploy: `copy /Y` is a cmd.exe flag, not PowerShell. PowerShell's `Copy-Item` (aliased to `copy`) overwrites silently by default — no flag needed. Worth remembering for future cross-shell deploy instructions.
+- Lefts open: end-to-end verification by forwarding a real shipping email to the tracking address; live confirmation that mobile app Active drops to a clean count after the cleanup; deletion of the auto-saved "Find Packages Without Tracking Numbers" query in Supabase (cosmetic only).
+
 ### 2026-05-18
 - Confirmed the JWT-auth fix from the previous session was committed (`72cc824`) and shipped via EAS update.
 - Discovered local `App.js` had drifted to a stale shorter version (851 lines vs 1299 committed) — restored from HEAD with `git show HEAD:App.js > /tmp/x && cat /tmp/x > App.js`.
@@ -217,18 +230,17 @@ For all events prior to this session, see the task list (`#1`–`#43` in Claude'
 
 ---
 
-## Where we left off (2026-05-18)
+## Where we left off (2026-05-23)
 
-App is fully functional end-to-end. Last confirmed working state on Cliff's phone: signed in as `cgiles1998@yahoo.com`, Active(5) / Archive(0) / Deleted(1).
+Backend parser is shipped and Supabase is cleaned up. Final per-user counts in Supabase: **active=4, archived=10, deleted=1, total=15**. The 4 active rows are the legitimate-looking shipments (have either a real tracking number or a real merchant name); the 10 archived are the junk rows from before the fix.
 
-**Pick up next session with the email parser cleanup** (see "Open issues / outstanding investigations" → email parser). Concretely:
+**Two verification steps still outstanding** (low-risk, just confirmation):
 
-1. Pull the backend repo: `git clone https://github.com/cg1980-cyber/on-the-way-backend.git` (or edit via GitHub web editor — repo is small).
-2. Locate the webhook handler (likely `server.js` route `POST /webhook/email`) and `emailParser.js`.
-3. Two changes:
-   - Reject emails whose parser output doesn't include at least a recognized carrier + a tracking-number-shaped string. Don't insert junk rows.
-   - Stop using the From: address as the merchant when the sender is a generic mail provider (gmail.com, yahoo.com, outlook.com, etc.) — those are forwarded messages, the real merchant is somewhere in the body.
-4. Once parser is sane, run a one-time cleanup SQL on Supabase to delete or archive existing rows where `merchant IN ('Gmail','Unknown Sender','Unknown')` AND `tracking_number IS NULL`.
-5. End-to-end test: forward a real shipping email to the user's tracking address, watch Railway logs, confirm a clean row appears in Supabase and in the app.
+1. **Mobile app sanity check.** Force-close + reopen the app on Cliff's phone. Active should drop from 5 cards to roughly 4 (or fewer after frontend dedup), and every visible card should look like a real shipment.
+2. **End-to-end parser test.** Forward a real shipping confirmation email (Amazon, Chewy, FedEx tracking update, etc.) from a Gmail/Yahoo inbox to the tracking address `cgiles1998.a940d0@onthewayapp.net`. Expected: a clean row appears in Supabase within ~20 seconds with a real merchant + tracking number, and the app shows it on next refresh. As a counter-test, forward something obviously non-shipping (a marketing email, a Google security alert); it should be silently ignored — no junk row created. Watch Railway logs for `Created new package …` vs `Ignoring non-shipping email …`.
 
-Everything else in the production-readiness checklist below is pre-launch polish, not blocking.
+If both pass, this thread is fully done and the app is in a clean working state. Production-readiness checklist below is the next swimlane (privacy policy, account deletion flow, AdMob, Play Store assets) — pre-launch polish, not blocking.
+
+**Cosmetic cleanup, optional:** Supabase auto-named the inspect query "Find Packages Without Tracking Numbers" and saved it under PRIVATE (5). Delete from SQL Editor sidebar if you don't want it lingering.
+
+**If anything regresses,** the SQL cleanup is reversible: `UPDATE packages SET archived = false WHERE archived = true AND last_updated >= '2026-05-23'` on the 10 rows we archived today.
