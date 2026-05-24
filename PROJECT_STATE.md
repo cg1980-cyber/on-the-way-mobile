@@ -209,6 +209,18 @@ If a future session needs to recover a specific past detail (exact code we wrote
 
 Append-only running record of meaningful events. Newest at the top. One line per event when possible; multi-line only when context is genuinely needed for recovery.
 
+### 2026-05-23 (end of day — marketing angle doc + monetization conversation)
+- Cliff uploaded `On_the_Way_Marketing_Angle.docx` and made it the strategic source of truth. Copy now persists in this folder. Standing instruction added at the top of this file: future sessions read the marketing doc before any feature/scope/marketing/positioning conversation, and flag conflicts directly.
+- Flagged two immediate conflicts: (a) live AdSlot placeholder + Task #48 (real AdMob) directly contradict Pillar #3 "No ads, no data selling"; (b) Task #49 (USPS Tracking 3.2) is enrichment, not Pillar #2 (address-based carrier auth via Informed Delivery / UPS My Choice / FedEx Delivery Manager).
+- Created tasks #51 (ads-vs-privacy decision), #52 (Pillar #2 carrier auth planning), #53 (Pillar #1 household accounts planning).
+- **Monetization alternatives discussion** — Cliff asked what privacy-preserving monetization looks like. Walked through options ranked by alignment:
+  - **Recommended primary:** household subscription / freemium (~$20-40/year per household). Reinforces both Pillar #1 (household-first) and Pillar #3. The product unit and pricing unit match.
+  - **Recommended secondary:** B2B landlord tier for property managers, apartment buildings, dorms, HOAs. Parallel revenue stream, doesn't touch consumer privacy positioning.
+  - **In reserve:** user-initiated affiliate (claims, insurance, hardware), hardware bundle partnerships (Ring/Eufy/Nest).
+  - **Off the table per Pillar #3:** display ads, behavioral targeting, data selling, tracked affiliate.
+  - Practical follow-through if Cliff accepts the recommendation: kill the AdSlot placeholder, close Task #48, eventually replace that real estate with subscription upsell ("Invite a household member" / "Upgrade to unlimited packages").
+- Cliff is sleeping on it. No monetization decision committed yet — pick it up tomorrow.
+
 ### 2026-05-23 (much later still — Brevo outbound + MSSC ticket sent)
 - Set up outbound sending from `support@onthewayapp.net` via Brevo + Gmail "Send as" so Cliff can reply from his brand domain without changing Cloudflare MX (the email-parser pipeline stays intact). Drove the whole flow via Chrome MCP: created Brevo account, added `onthewayapp.net` as a sender domain, added 4 DNS records to Cloudflare (Brevo code TXT, two DKIM CNAMEs, DMARC TXT), Brevo verified all 4 on first try, generated SMTP key, configured Gmail Send-as with `smtp-relay.brevo.com:587`, login `ac572d001@smtp-brevo.com`, and a Brevo SMTP key. Test email confirmed clean delivery (no "via gmail.com" caveat, DKIM signed by onthewayapp.net). Tracked as task #50, now closed.
 - **SMTP credentials for future reference** (key itself is a secret — only in Cliff's Gmail Send-as config now):
@@ -264,19 +276,22 @@ Cliff also uploaded a marketing strategy doc (`On_the_Way_Marketing_Angle.docx`,
 
 ### ⚠️ Strategic conflicts flagged at session end (resolve next session)
 
-Per the marketing angle doc's three pillars, two pieces of in-flight work currently conflict with the strategy. Both should be revisited before continuing.
+Per the marketing angle doc's three pillars, two pieces of in-flight work currently conflict with the strategy.
 
-1. **AdSlot placeholder (live) + Task #48 (real AdMob) conflict with Pillar #3 (Privacy-First).** The doc says explicitly "No ads, no data selling" as a proof point for the "We never read your email" message. Need a decision: kill the ad slot entirely, or rewrite the strategy to allow tasteful ads. Currently `AdSlot` ships in `App.js` as a placeholder banner in the middle of the Active list.
-2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar #2 (Address-Based Carrier Auth).** Tracking 3.2 looks up status for tracking numbers we already have via email forwarding. Pillar #2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — a different USPS product (and different carrier products) that gives address-based visibility without requiring a tracking number. Task #49 is still worth doing as live-status enrichment, but the MVP differentiator (Pillar #2) is a separate, bigger architectural item that isn't queued yet.
-3. **The current email-forwarding ingest model isn't pillar #2 either.** It's better than Route/AfterShip's inbox-scraping (user actively forwards rather than us reading their inbox), but the household-first + address-based pillars require the carrier-auth pipeline. Probably keep email forwarding as a transitional or complementary input source; don't market it as the primary mechanism.
+1. **AdSlot placeholder (live) + Task #48 (real AdMob) conflict with Pillar #3 (Privacy-First).** The doc says explicitly "No ads, no data selling" as a proof point for "We never read your email." `AdSlot` is already shipping in `App.js` as a placeholder banner in the middle of the Active list. **Recommendation pending Cliff's decision (he's sleeping on it):** drop ads entirely, lean into ad-free privacy as a differentiator, and monetize via household subscription (~$20-40/yr per household) as primary + B2B landlord tier as secondary. Affiliate (user-initiated only) and hardware bundles held in reserve. Full reasoning in task #51 and in the 2026-05-23 (end of day) session log entry.
+2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar #2 (Address-Based Carrier Auth).** Tracking 3.2 looks up status for tracking numbers we already have via email forwarding. Pillar #2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — different products that give address-based visibility without requiring a tracking number. Task #49 is still worth doing as live-status enrichment, but the MVP differentiator (Pillar #2) is a separate, bigger architectural item — see task #52.
+3. **The current email-forwarding ingest model isn't pillar #2 either.** Better than Route/AfterShip's inbox-scraping (user actively forwards rather than us reading their inbox) but still email-based. Probably keep as a transitional or complementary input source; don't market it as the primary mechanism.
 
-**Open/queued items (no priority order — pick what you want next):**
+**Open/queued items in suggested order (pick what you want next):**
 
-1. **Task #49 — Live tracking status refresh.** STILL BLOCKED on USPS. MSSC ticket was sent 2026-05-23 from support@onthewayapp.net. When they reply with BCG creds, sign in to https://developer.usps.com, create app "On The Way", subscribe Tracking 3.2, grab `client_id` + `client_secret`, paste here, and we wire it up (~30 min of work). Alternative if MSSC is slow or never responds: pivot to AfterShip free tier (100 trackings/month, all carriers, simple email signup — strongly recommended fallback). Full plan in task description.
-2. **Task #48 — Real AdMob.** Replace placeholder `AdSlot` with `<BannerAd/>` from `react-native-google-mobile-ads`. Requires Cliff's AdMob account + ad unit IDs + a native EAS build (not OTA). Not blocking but needed before any monetization.
-3. **More visual polish.** Cliff is in a "visual changes" swimlane — anything else he flags about the UI lands here.
-4. **Pre-launch production readiness** (privacy policy, in-app account deletion, Data Safety form, Play Console setup) — see the checklist above.
-5. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; could be simplified by moving hidden actions into SwipeListView's `renderHiddenItem` or dropping SwipeListView for a plain FlatList.
+1. **Task #51 — Monetization decision (ads vs. subscription).** Cliff is sleeping on it. Recommendation lean: drop ads, household subscription as primary, B2B landlord as secondary. Once decided, that decision unblocks the AdSlot/AdMob cleanup AND tells us what to design the next round of UI around (subscription paywall, household member invite flow, etc.). Likely the first thing to tackle tomorrow.
+2. **Task #52 — Pillar #1 (Household accounts).** Multi-member, shared feed, per-person filtering. Doesn't require any external service; can start anytime. Large schema/auth/UI change.
+3. **Task #49 — Live tracking status refresh.** Still blocked on USPS MSSC reply (Mon at earliest). When BCG creds arrive: sign in to https://developer.usps.com, subscribe Tracking 3.2, paste client_id+client_secret here, we wire it up (~30 min). Alternative if MSSC is slow: AfterShip free tier (100 trackings/month, all carriers).
+4. **Task #53 — Pillar #2 (Address-based carrier auth).** The headline MVP differentiator. Bigger than #49 — different USPS API (Informed Delivery, not Tracking 3.2), plus UPS My Choice, plus FedEx Delivery Manager. Each requires its own business account approval. Multi-week timeline. Starts after BCG account is created.
+5. **Task #48 — Real AdMob.** Likely becomes a "close as won't-do" depending on the #51 decision.
+6. **More visual polish.** Anytime Cliff flags something else.
+7. **Pre-launch production readiness** (privacy policy, in-app account deletion, Data Safety form, Play Console setup) — see the checklist above.
+8. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; could be simplified later.
 
 **Cosmetic cleanup (still optional):** "Find Packages Without Tracking Numbers" saved query lingers in Supabase SQL Editor's PRIVATE list. Delete any time.
 
