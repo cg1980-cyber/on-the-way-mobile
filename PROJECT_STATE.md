@@ -207,6 +207,16 @@ If a future session needs to recover a specific past detail (exact code we wrote
 
 Append-only running record of meaningful events. Newest at the top. One line per event when possible; multi-line only when context is genuinely needed for recovery.
 
+### 2026-05-23 (much later still — Brevo outbound + MSSC ticket sent)
+- Set up outbound sending from `support@onthewayapp.net` via Brevo + Gmail "Send as" so Cliff can reply from his brand domain without changing Cloudflare MX (the email-parser pipeline stays intact). Drove the whole flow via Chrome MCP: created Brevo account, added `onthewayapp.net` as a sender domain, added 4 DNS records to Cloudflare (Brevo code TXT, two DKIM CNAMEs, DMARC TXT), Brevo verified all 4 on first try, generated SMTP key, configured Gmail Send-as with `smtp-relay.brevo.com:587`, login `ac572d001@smtp-brevo.com`, and a Brevo SMTP key. Test email confirmed clean delivery (no "via gmail.com" caveat, DKIM signed by onthewayapp.net). Tracked as task #50, now closed.
+- **SMTP credentials for future reference** (key itself is a secret — only in Cliff's Gmail Send-as config now):
+  - SMTP server: `smtp-relay.brevo.com`
+  - Port: `587`
+  - Login: `ac572d001@smtp-brevo.com`
+  - SMTP key name in Brevo dashboard: "Gmail Send As" (expires May 23, 2027)
+- Sent the MSSC ticket to `mssc@usps.gov` from `support@onthewayapp.net` with subject "USPS.com Business Account Creation Help" requesting manual BCG account creation (online identity-verification path failed earlier). MSSC hours Mon-Fri 7am-7pm CST, so earliest response is Monday 2026-05-25 (or later depending on backlog). When they reply, sign in to https://developer.usps.com with the new credentials, subscribe Tracking 3.2 to a new app called "On The Way", grab client_id + client_secret, paste into the next session — and task #49 (live tracking) is fully unblocked.
+- Brevo dashboard tab and Chrome MCP became flaky during the SMTP key generation step (page froze multiple times). Workaround used: Cliff regenerated the SMTP key in his own Chrome window and pasted the secret back. Worth remembering — Brevo's React dashboard doesn't love being driven by Chrome automation, so future Brevo work is best done by Cliff directly.
+
 ### 2026-05-23 (much later — visual round 2 + tracking attempt)
 - **Visual round 2 (shipped):** SwipeablePackageCard now shows each populated field on its own line — nickname (big), merchant ("From X" subtitle when nickname is set, otherwise main title), carrier+status dot, tracking number, note. Blank fields hide. Card grows naturally. Commit `33394e0`, EAS update group `f0436452`.
 - **Tracking number is now a tappable hyperlink** on the card AND detail screen. `getTrackingUrl(carrier, trackingNumber)` helper routes to carrier-specific tracking pages (USPS, UPS, FedEx, DHL) with 17track.net as the generic fallback. Implemented in `App.js`.
@@ -244,19 +254,14 @@ For all events prior to this session, see the task list (`#1`–`#43` in Claude'
 
 ---
 
-## Where we left off (2026-05-23, end of session)
+## Where we left off (2026-05-23, end of session — long day)
 
-App is fully working end-to-end with the new visual round shipped:
-- Detail screen has three editable fields ("What it is" / "Who it came from" / "Reference Note") for Active+Archived, restore-to-edit banner for Deleted.
-- List cards show nickname + merchant on separate lines, hiding any blank field.
-- Tracking number is a tappable hyperlink that opens the carrier's tracking page (or 17track.net for unknown carriers).
-- Ad slot placeholder lives in the middle of the active list (or top of the empty state).
-- Swipe-to-archive / swipe-to-delete still works; action layer sits behind the card; tap opens detail.
+App is fully working end-to-end with the new visual round shipped. Brevo is wired up for outbound from `support@onthewayapp.net`. MSSC ticket sent to USPS to manually create the BCG account; awaiting their reply (Mon 2026-05-25 at earliest).
 
 **Open/queued items (no priority order — pick what you want next):**
 
-1. **Task #49 — Live tracking status refresh.** BLOCKED on Cliff getting access to the USPS Tracking 3.2 API. Online BCG signup failed at identity verification (2026-05-23); next step is either (a) wait until Monday 2026-05-25 to email `mssc@usps.gov` for manual BCG creation, or (b) pivot to AfterShip free tier (100 trackings/month, all carriers in one API, simple email signup — strongly recommended if MSSC is slow). Full implementation plan lives in the task description.
-2. **Task #48 — Real AdMob.** Replace the placeholder `AdSlot` with `<BannerAd/>` from `react-native-google-mobile-ads`. Requires Cliff's AdMob account + ad unit IDs + a native EAS build (not OTA). Not blocking, but needed before any monetization.
+1. **Task #49 — Live tracking status refresh.** STILL BLOCKED on USPS. MSSC ticket was sent 2026-05-23 from support@onthewayapp.net. When they reply with BCG creds, sign in to https://developer.usps.com, create app "On The Way", subscribe Tracking 3.2, grab `client_id` + `client_secret`, paste here, and we wire it up (~30 min of work). Alternative if MSSC is slow or never responds: pivot to AfterShip free tier (100 trackings/month, all carriers, simple email signup — strongly recommended fallback). Full plan in task description.
+2. **Task #48 — Real AdMob.** Replace placeholder `AdSlot` with `<BannerAd/>` from `react-native-google-mobile-ads`. Requires Cliff's AdMob account + ad unit IDs + a native EAS build (not OTA). Not blocking but needed before any monetization.
 3. **More visual polish.** Cliff is in a "visual changes" swimlane — anything else he flags about the UI lands here.
 4. **Pre-launch production readiness** (privacy policy, in-app account deletion, Data Safety form, Play Console setup) — see the checklist above.
 5. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; could be simplified by moving hidden actions into SwipeListView's `renderHiddenItem` or dropping SwipeListView for a plain FlatList.
