@@ -159,6 +159,55 @@ function Checkbox({ checked, onPress }) {
   );
 }
 
+// Build a carrier-specific tracking URL. Falls back to 17track (which auto-
+// detects carrier from the number) when we don't have a recognized carrier.
+function getTrackingUrl(carrier, trackingNumber) {
+  if (!trackingNumber) return null;
+  const tn = encodeURIComponent(String(trackingNumber).trim());
+  switch ((carrier || '').toLowerCase()) {
+    case 'usps':
+      return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${tn}`;
+    case 'ups':
+      return `https://www.ups.com/track?tracknum=${tn}`;
+    case 'fedex':
+      return `https://www.fedex.com/fedextrack/?trknbr=${tn}`;
+    case 'dhl':
+      return `https://www.dhl.com/en/express/tracking.html?AWB=${tn}`;
+    default:
+      return `https://t.17track.net/en#nums=${tn}`;
+  }
+}
+
+async function openTrackingLink(pkg) {
+  const url = getTrackingUrl(pkg && pkg.carrier, pkg && pkg.tracking_number);
+  if (!url) return;
+  try {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) await Linking.openURL(url);
+  } catch (err) {
+    console.error('Open tracking link error:', err);
+  }
+}
+
+// Placeholder ad slot. When real AdMob is wired up (requires a native rebuild
+// and a configured AdMob account + ad-unit ID), swap the body for a
+// <BannerAd .../> from react-native-google-mobile-ads. The visual styling
+// here intentionally signals "ad" to the user (SPONSORED label) so it doesn't
+// get confused for a package card.
+function AdSlot() {
+  return (
+    <TouchableOpacity
+      style={styles.adSlot}
+      activeOpacity={0.85}
+      onPress={() => Linking.openURL('https://onthewayapp.net')}
+    >
+      <Text style={styles.adSlotLabel}>SPONSORED</Text>
+      <Text style={styles.adSlotTitle}>Your ad here</Text>
+      <Text style={styles.adSlotSubtitle}>Tap to learn more</Text>
+    </TouchableOpacity>
+  );
+}
+
 function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArchived = false, isDeleted = false }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const panResponder = useRef(
@@ -220,14 +269,32 @@ function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArch
           activeOpacity={0.7}
         >
           <View style={styles.packageLeft}>
-            <Text style={styles.packageMerchant}>{item.nickname || item.merchant}</Text>
+            {/* Only show fields the user has actually filled in. Hide anything blank. */}
+            {item.nickname ? (
+              <Text style={styles.packageMerchant} numberOfLines={2}>{item.nickname}</Text>
+            ) : null}
+            {item.merchant ? (
+              <Text
+                style={item.nickname ? styles.packageFromSubtle : styles.packageMerchant}
+                numberOfLines={2}
+              >
+                {item.nickname ? `From ${item.merchant}` : item.merchant}
+              </Text>
+            ) : null}
             <View style={styles.packageMeta}>
               <Text style={styles.packageCarrier}>{item.carrier}</Text>
               <View style={[styles.statusDot, { backgroundColor: statusColors[item.status] || colors.textMuted }]} />
             </View>
-            {item.tracking_number && <Text style={styles.trackingNumberText}>#{item.tracking_number}</Text>}
+            {item.tracking_number ? (
+              <TouchableOpacity
+                onPress={() => openTrackingLink(item)}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Text style={styles.trackingNumberLink}>#{item.tracking_number}</Text>
+              </TouchableOpacity>
+            ) : null}
             {item.note ? (
-              <Text style={styles.notePreview} numberOfLines={1}>Note: {item.note}</Text>
+              <Text style={styles.notePreview} numberOfLines={2}>📝 {item.note}</Text>
             ) : null}
           </View>
           {item.estimated_delivery && (
@@ -867,7 +934,17 @@ export default function App() {
           <View style={styles.card}>
             <Text style={styles.detailLabel}>Carrier</Text>
             <Text style={styles.detailValue}>{pkg.carrier}</Text>
-            {pkg.tracking_number && (<><Text style={styles.detailLabel}>Tracking Number</Text><Text style={styles.detailValue}>{pkg.tracking_number}</Text></>)}
+            {pkg.tracking_number && (
+              <>
+                <Text style={styles.detailLabel}>Tracking Number</Text>
+                <TouchableOpacity
+                  onPress={() => openTrackingLink(pkg)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={styles.detailValueLink}>{pkg.tracking_number} →</Text>
+                </TouchableOpacity>
+              </>
+            )}
             <Text style={styles.detailLabel}>Last Updated</Text>
             <Text style={styles.detailValue}>{new Date(pkg.last_updated).toLocaleString()}</Text>
           </View>
@@ -1036,6 +1113,8 @@ export default function App() {
           activePackages.length === 0 ? (
             <ScrollView style={styles.emptyStateScroll}>
               <View style={styles.emptyContent}>
+                {/* Ad slot — top of the empty state, below the tab bar */}
+                <AdSlot />
                 <Text style={styles.emptyIcon}>📦</Text>
                 <Text style={styles.emptyTitle}>No packages yet</Text>
 
@@ -1084,17 +1163,31 @@ export default function App() {
             </ScrollView>
           ) : (
             <SwipeListView
-              data={activePackages}
+              data={(() => {
+                // Insert a single ad slot in the middle of the active list.
+                // For a 1-card list, put the ad after it. For 0, nothing
+                // (we render the empty state above instead).
+                if (activePackages.length === 0) return activePackages;
+                const mid = Math.max(1, Math.floor(activePackages.length / 2));
+                return [
+                  ...activePackages.slice(0, mid),
+                  { id: '__ad_active__', __ad: true },
+                  ...activePackages.slice(mid),
+                ];
+              })()}
               keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <SwipeablePackageCard
-                  item={item}
-                  onPress={() => { setSelectedPackage(item); setScreen('detail'); }}
-                  onSwipeRight={() => archivePackage(item)}
-                  onSwipeLeft={() => moveToDeleted(item)}
-                  isArchived={false}
-                />
-              )}
+              renderItem={({ item }) => {
+                if (item.__ad) return <AdSlot />;
+                return (
+                  <SwipeablePackageCard
+                    item={item}
+                    onPress={() => { setSelectedPackage(item); setScreen('detail'); }}
+                    onSwipeRight={() => archivePackage(item)}
+                    onSwipeLeft={() => moveToDeleted(item)}
+                    isArchived={false}
+                  />
+                );
+              }}
               renderHiddenItem={() => null}
               contentContainerStyle={{ paddingBottom: 24 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -1275,7 +1368,24 @@ const styles = StyleSheet.create({
   packageMerchant: { fontSize: 16, fontWeight: '600', color: colors.text },
   packageCarrier: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   trackingNumberText: { fontSize: 11, color: colors.textMuted, marginTop: 2, fontFamily: 'monospace' },
-  notePreview: { fontSize: 12, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  notePreview: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontStyle: 'italic' },
+  packageFromSubtle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  trackingNumberLink: { fontSize: 11, color: colors.primary, marginTop: 4, fontFamily: 'monospace', textDecorationLine: 'underline' },
+  detailValueLink: { fontSize: 15, color: colors.primary, marginBottom: 8, textDecorationLine: 'underline' },
+  adSlot: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginHorizontal: 12,
+    marginVertical: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  adSlotLabel: { fontSize: 10, fontWeight: '700', color: '#f59e0b', letterSpacing: 1.2, marginBottom: 4 },
+  adSlotTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 2 },
+  adSlotSubtitle: { fontSize: 12, color: colors.textMuted },
   restoreToEditTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
   restoreToEditBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   authHelpRow: { marginTop: 16, alignItems: 'center', gap: 10 },
