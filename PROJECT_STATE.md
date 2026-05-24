@@ -207,6 +207,13 @@ If a future session needs to recover a specific past detail (exact code we wrote
 
 Append-only running record of meaningful events. Newest at the top. One line per event when possible; multi-line only when context is genuinely needed for recovery.
 
+### 2026-05-23 (much later — visual round 2 + tracking attempt)
+- **Visual round 2 (shipped):** SwipeablePackageCard now shows each populated field on its own line — nickname (big), merchant ("From X" subtitle when nickname is set, otherwise main title), carrier+status dot, tracking number, note. Blank fields hide. Card grows naturally. Commit `33394e0`, EAS update group `f0436452`.
+- **Tracking number is now a tappable hyperlink** on the card AND detail screen. `getTrackingUrl(carrier, trackingNumber)` helper routes to carrier-specific tracking pages (USPS, UPS, FedEx, DHL) with 17track.net as the generic fallback. Implemented in `App.js`.
+- **Ad slot placeholder (shipped):** `AdSlot` component injected at the middle of the active list (or at top of the empty state). Amber "SPONSORED" styling so it can't be confused with a package. Real AdMob is queued as task #48 — requires a native rebuild + Google AdMob account.
+- **Live tracking-status feature (blocked, queued as task #49):** Cliff asked for status to auto-refresh on app open and pull-to-refresh, with delivered packages staying in Active until the user swipes them. Plan: USPS Tracking 3.2 API for USPS packages first, then FedEx/UPS later. Attempted to register for the USPS Business Customer Gateway via the online portal at https://reg.usps.com — failed at the identity-verification step. USPS instructed Cliff to email `mssc@usps.gov` (subject "USPS.com Business Account Creation Help") with business name, address, email, phone. MSSC hours Mon-Fri 7am-7pm CST, so earliest response is Monday 2026-05-25. Pivot alternative on the table: AfterShip free tier (100 trackings/month, covers all carriers via one API, no identity verification needed). See task #49 for the full implementation plan once we have credentials.
+- Note for next session: the screenshot Cliff sent of the failed BCG signup confirmed identity verification was the blocker. If MSSC takes too long or pushes back, default to AfterShip — same architecture, faster path to a working demo.
+
 ### 2026-05-23 (later)
 - Moved to a visual-changes swimlane. Cliff asked: tapping a package card should open an editable detail screen with three fields ("What it is" / "Who it came from" / "Reference Note") that work for Active and Archived packages; the Deleted detail screen should show a note that edits require restoring first.
 - Backend: added `merchant` to the destructure and update payload in `PATCH /api/packages/:id`. Committed via GitHub web editor (driven by Claude-in-Chrome MCP) as `e085e06`. Note for next time: the local `on-the-way-backend` clone on Cliff's machine is now one commit behind remote — `git pull` before any local edits.
@@ -239,19 +246,24 @@ For all events prior to this session, see the task list (`#1`–`#43` in Claude'
 
 ## Where we left off (2026-05-23, end of session)
 
-Email parser, junk-row cleanup, AND the first round of visual edits are all shipped and verified on Cliff's phone. Confirmed working end-to-end:
+App is fully working end-to-end with the new visual round shipped:
+- Detail screen has three editable fields ("What it is" / "Who it came from" / "Reference Note") for Active+Archived, restore-to-edit banner for Deleted.
+- List cards show nickname + merchant on separate lines, hiding any blank field.
+- Tracking number is a tappable hyperlink that opens the carrier's tracking page (or 17track.net for unknown carriers).
+- Ad slot placeholder lives in the middle of the active list (or top of the empty state).
+- Swipe-to-archive / swipe-to-delete still works; action layer sits behind the card; tap opens detail.
 
-- Detail screen has three editable fields for Active/Archived packages ("What it is" → nickname, "Who it came from" → merchant, "Reference Note" → note). Backend PATCH endpoint accepts the merchant field.
-- Deleted detail screen shows a restore-to-edit banner instead of the edit fields.
-- Tap on a card opens the detail screen (was broken pre-existing, fixed in this session).
-- Swipe gestures still work — green ARCHIVE / red DELETE actions now sit behind the card and reveal on swipe instead of stacking on top of the list.
+**Open/queued items (no priority order — pick what you want next):**
 
-**Next likely directions for new sessions** (none in flight, pick any):
+1. **Task #49 — Live tracking status refresh.** BLOCKED on Cliff getting access to the USPS Tracking 3.2 API. Online BCG signup failed at identity verification (2026-05-23); next step is either (a) wait until Monday 2026-05-25 to email `mssc@usps.gov` for manual BCG creation, or (b) pivot to AfterShip free tier (100 trackings/month, all carriers in one API, simple email signup — strongly recommended if MSSC is slow). Full implementation plan lives in the task description.
+2. **Task #48 — Real AdMob.** Replace the placeholder `AdSlot` with `<BannerAd/>` from `react-native-google-mobile-ads`. Requires Cliff's AdMob account + ad unit IDs + a native EAS build (not OTA). Not blocking, but needed before any monetization.
+3. **More visual polish.** Cliff is in a "visual changes" swimlane — anything else he flags about the UI lands here.
+4. **Pre-launch production readiness** (privacy policy, in-app account deletion, Data Safety form, Play Console setup) — see the checklist above.
+5. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; could be simplified by moving hidden actions into SwipeListView's `renderHiddenItem` or dropping SwipeListView for a plain FlatList.
 
-1. **More visual polish** — tab styling, card layout tweaks, color/theme refinement, ETA badge styling, etc. Cliff is in a "visual changes" swimlane.
-2. **Pre-launch production readiness checklist** above — privacy policy, in-app account deletion, AdMob integration, Data Safety form, Play Console setup. None are blocking but all are needed before submitting to Play Store.
-3. **Architectural cleanup** (low priority): SwipeListView in `App.js` is used with `renderHiddenItem={() => null}` while `SwipeablePackageCard` renders its own hidden-action layer via the internal PanResponder. The pattern works after today's fixes but is duplicative — could be simplified by either moving the hidden actions into SwipeListView's `renderHiddenItem` (and removing the internal PanResponder) or dropping SwipeListView for a plain FlatList.
+**Cosmetic cleanup (still optional):** "Find Packages Without Tracking Numbers" saved query lingers in Supabase SQL Editor's PRIVATE list. Delete any time.
 
-**Cosmetic cleanup (still optional):** "Find Packages Without Tracking Numbers" lingers as a saved query in Supabase SQL Editor's PRIVATE list. Delete it any time.
-
-**If anything regresses,** the parser-cleanup SQL is reversible: `UPDATE packages SET archived = false WHERE archived = true AND last_updated >= '2026-05-23'` on the 10 rows archived today. The mobile-side edits can be rolled back by reverting the relevant commits in `cg1980-cyber/on-the-way-mobile` and republishing a previous EAS update (`eas update --branch preview --republish --group <previous-group-id>` — group IDs visible in the EAS dashboard).
+**Rollback notes if anything regresses:**
+- Parser-cleanup SQL is reversible: `UPDATE packages SET archived = false WHERE archived = true AND last_updated >= '2026-05-23'`.
+- Mobile-side changes: revert relevant commits in `cg1980-cyber/on-the-way-mobile` and republish an earlier EAS update (`eas update --branch preview --republish --group <previous-group-id>`; group IDs visible in the EAS dashboard).
+- Backend-side changes: revert in `cg1980-cyber/on-the-way-backend`; Railway auto-redeploys on push.
