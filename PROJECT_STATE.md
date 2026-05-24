@@ -4,29 +4,137 @@ _Last updated: 2026-05-23_
 
 ## How to use this document
 
-This is the standing reference for the On the Way project. Read it at the start of any chat about this project. It covers what the app is, how it's built, what's been decided, what's outstanding, and where the lines are.
+This is the standing reference for the On the Way project — the single source of truth for what the app is, where it's going strategically, how it's built, what's been decided, and what's outstanding. Read it at the start of any chat about this project.
 
-**Companion doc to always consult alongside this one:** `On_the_Way_Marketing_Angle.docx` (in this same project). That doc is the strategic source of truth — the three pillars, the competitive positioning, the MVP priorities. Ground feature/scope/marketing/positioning decisions in it. If a request conflicts with the three pillars, flag it directly. If a decision in a chat changes or expands the strategy, offer to update the marketing doc so it stays the living source of truth.
+Use it both ways: when a question is about features, scope, marketing, positioning, MVP priorities, or competitive trade-offs, ground responses in the strategy section below. When a question is about code, deployment, or operations, the architecture and reference sections are the source of truth. If a request conflicts with the three pillars, flag it directly. If a decision in a chat changes or expands the strategy, update this document so it stays current.
 
-**Keep this file fresh.** Append to "Recent decisions" when a meaningful call is made. Update "Active work" at the end of a session. Add a line to "History snapshot" when a major milestone ships. Don't wait to be asked.
+**Keep this file fresh.** Append to "Key decisions" when a meaningful call is made. Update "Active work" at the end of a session. Add a line to "History snapshot" when a major milestone ships. Don't wait to be asked.
 
-**Commits.** The user (Cliff) commits and pushes both this file and the marketing doc himself from `C:\Users\hicli\on-the-way`. The sandbox can edit but doesn't push.
+**Commits.** Cliff commits and pushes this file from `C:\Users\hicli\on-the-way`. The sandbox can edit but doesn't push.
 
 ---
 
-## What this is
+# Part 1 — Strategy
+
+## What the app is
 
 A mobile app for households to track every package coming to their address — including the ones they don't know about yet — without giving up email privacy.
 
-**Strategy summary** (see `On_the_Way_Marketing_Angle.docx` for the full positioning):
+**Distribution target:** Google Play Store first, iOS App Store later.
 
-- **Pillar 1 — Household-First Design.** Multi-member household account with shared feed, per-person filtering, gift mode, pet-supply auto-categorization.
-- **Pillar 2 — Address-Based Carrier Authorization.** USPS Informed Delivery + UPS My Choice + FedEx Delivery Manager simultaneously, so packages addressed to the home appear regardless of email. The "package you didn't know about" hook.
-- **Pillar 3 — Privacy-First Positioning.** No inbox scraping, no ads, no data selling. Carrier authorization replaces email access as the primary ingest source.
+## The competitive landscape
 
-**Distribution target:** Google Play Store first, iOS App Store later. **Monetization direction (recommended, decision pending — see Active work):** household subscription as primary, B2B landlord tier as secondary, no ads.
+The multi-carrier package tracking space is crowded. The main players:
+
+- **Route** — 50M+ users, 600+ carriers, scans email inbox to auto-import shipments. The biggest direct competitor.
+- **AfterShip** — 700+ carriers, syncs with Gmail and Amazon to auto-detect shipments.
+- **Parcel** — 300 carriers, popular on iOS/Mac/Apple Watch, Amazon integration.
+- **17TRACK, OneTracker, Package Tracker** — variations on the same theme: one app, many carriers, push notifications.
+
+Carriers themselves also offer address-based tracking — USPS Informed Delivery, UPS My Choice, FedEx Delivery Manager — but each is siloed to its own carrier. Three separate accounts, three separate apps, no unified view.
+
+## The gap in the market
+
+No current app combines both of these in one experience:
+
+- Unified multi-carrier tracking.
+- Address-based auto-detection that pulls from all of the major carriers' authorization systems simultaneously, for a household with multiple people at one address.
+
+Existing multi-carrier apps require tracking numbers or email scraping. Carrier-specific tools do address-based, but only for their own packages. The household angle — where everyone at the address sees every package — is genuinely uncovered.
+
+## The three pillars of differentiation
+
+### Pillar 1 — Household-first design
+
+Every competitor is built around the individual user. On the Way is built around the household.
+
+- One account, multiple household members, shared package feed.
+- Per-person filtering — see Cory's packages, Cliff's packages, or the whole household.
+- Gift/surprise mode — hide a specific package from a household member so birthday gifts aren't spoiled.
+- Pet supply auto-categorization — recurring Chewy orders, vet meds, etc. tagged automatically.
+
+### Pillar 2 — Address-based carrier authorization
+
+The headline feature: see every package coming to your home, even the ones you don't know about yet.
+
+Pull from USPS Informed Delivery, UPS My Choice, and FedEx Delivery Manager simultaneously through carrier authorization rather than email scraping. This catches:
+
+- Gifts mailed by family.
+- Packages a spouse ordered without telling the other.
+- Anything addressed to the home that never generated an email confirmation.
+
+This is the single feature that no current app does, and it's the strongest reason for someone to switch.
+
+### Pillar 3 — Privacy-first positioning
+
+Route and AfterShip scan user inboxes. That's a real turnoff for a growing share of users. On the Way uses carrier authorization, not email access, so the messaging writes itself:
+
+- **We never read your email.**
+- Local storage where possible.
+- No ads, no data selling.
+
+## MVP priority
+
+Three features for the initial build:
+
+1. **Household accounts** — multi-member, shared feed, per-person filtering.
+2. **Address-based carrier authorization** — USPS Informed Delivery + UPS My Choice + FedEx Delivery Manager.
+3. **The "package you didn't know about" hook** — lead marketing message.
+
+Everything else comes later.
+
+## Secondary features (post-MVP)
+
+### Porch-to-person handoff
+
+Once a package is delivered, existing apps go quiet. But the package isn't really done until it's inside and in the right hands.
+
+- "Bring inside" reminder if a package sits on the porch for X hours.
+- Notify whoever's home, not just the buyer.
+- Mark as "received by [household member]."
+- Optional Ring/Nest doorbell snapshot integration at delivery time.
+
+### Smart bundling and arrival prediction
+
+- "3 packages arriving Thursday" instead of three separate alerts.
+- "Your Amazon order ships in 2 parts — part 2 arrives Friday."
+- Likely-delay alerts based on carrier patterns before the carrier admits it.
+- Heat map of the delivery week so you know which days to be home.
+
+### Travel/away mode
+
+Pause non-urgent notifications, alert a designated neighbor automatically, give a single end-of-trip summary. None of the current apps do this well.
+
+### Anti-porch-pirate features
+
+Each carrier takes a delivery photo. Pull them all into one timeline. Add neighborhood theft alerts (opt-in) and automated claim-filing assistance when something goes missing.
+
+## Strategic positioning summary
+
+Don't try to out-feature Route on carrier count — they've spent years on those integrations and will win that fight. Instead, be the best app for a specific use case they're ignoring:
+
+**The multi-person household that wants total visibility without giving up email privacy.**
+
+That's a real, defensible niche, and it aligns naturally with the carrier-authorization approach already part of the concept.
+
+## Competitive risk to watch
+
+Route or AfterShip could add address-based carrier authorization at any time. They have the user base and carrier relationships to do it faster than a solo builder. Speed matters, and the household-first angle has to be sharp enough that even if they catch up on auth, On the Way still wins on use case fit.
+
+## Monetization direction
+
+**Recommended (decision pending — see Active work, task #51):**
+
+- **Primary: household subscription / freemium.** Free tier covers a single user with limited features. Paid tier (~$20–40/year per household) unlocks household members, gift mode, anti-theft tools, longer history. Aligns with Pillar 1 (household-first) — pricing follows the same unit the product is built around. Mental model: Apple Family / Spotify Family.
+- **Secondary: B2B landlord tier.** Property managers, apartment buildings, dorms, HOAs — anywhere multiple households share a delivery surface. Different product surface, higher price per door, parallel revenue stream, no consumer privacy compromise.
+- **In reserve:** user-initiated affiliate (claims, insurance, hardware partners), hardware bundle partnerships (Ring/Eufy/Nest doorbells).
+- **Off the table per Pillar 3:** display ads, behavioral targeting, data selling, tracked affiliate.
+
+This recommendation supersedes the earlier plan ("small-format ad monetization") which conflicted with Pillar 3. Cliff has the call on whether to accept the recommendation or revise the strategy.
 
 ---
+
+# Part 2 — Technical reference
 
 ## Architecture
 
@@ -40,14 +148,13 @@ A mobile app for households to track every package coming to their address — i
 | Outbound email (support@…) | Brevo SMTP relay via Gmail "Send mail as" | Brevo + Gmail |
 | OTA updates | EAS Update (preview branch) | Expo CDN |
 
-**Repos**
-- Mobile: `cg1980-cyber/on-the-way-mobile`. Local clone: `C:\Users\hicli\on-the-way`.
-- Backend: `cg1980-cyber/on-the-way-backend`. Local clone: `C:\Users\hicli\on-the-way-backend` (currently one commit behind remote — `git pull` before any local edits).
-- Password-reset page: GitHub Pages from the mobile repo's `/docs` folder → `https://cg1980-cyber.github.io/on-the-way-mobile/reset.html`.
-
 **Note on the email-ingest pipeline.** It is the current way packages enter the system, but it's transitional. The Pillar 2 architecture (address-based carrier auth) replaces it as the primary mechanism. Keep email ingest as a complementary fallback for emails not covered by carrier auth (e.g. Amazon TBA codes); do not market it as the primary mechanism.
 
----
+## Repos
+
+- **Mobile:** `cg1980-cyber/on-the-way-mobile`. Local clone: `C:\Users\hicli\on-the-way`.
+- **Backend:** `cg1980-cyber/on-the-way-backend`. Local clone: `C:\Users\hicli\on-the-way-backend` (currently one commit behind remote — `git pull` before any local edits).
+- **Password-reset page:** GitHub Pages from the mobile repo's `/docs` folder → `https://cg1980-cyber.github.io/on-the-way-mobile/reset.html`.
 
 ## Key IDs and URLs
 
@@ -60,8 +167,6 @@ A mobile app for households to track every package coming to their address — i
 - **Brevo SMTP** (outbound from `support@onthewayapp.net`): server `smtp-relay.brevo.com`, port `587`, login `ac572d001@smtp-brevo.com`. SMTP key (named "Gmail Send As" in Brevo, expires 2027-05-23) lives only in Cliff's Gmail Send-as config.
 
 Secrets live in `.env` (local) and EAS env vars under the `production` environment. **Never commit `.env`.**
-
----
 
 ## Mobile app
 
@@ -91,8 +196,6 @@ Secrets live in `.env` (local) and EAS env vars under the `production` environme
 - Preview (clean app, OTA-updated): `eas build --profile preview --platform android` ← **current target**
 - Production (AAB for Play Store): `eas build --profile production --platform android`
 
----
-
 ## Backend
 
 - Push to `main` on GitHub → Railway auto-deploys.
@@ -111,8 +214,6 @@ Secrets live in `.env` (local) and EAS env vars under the `production` environme
 
 Columns: `id`, `user_id`, `tracking_number`, `carrier`, `merchant`, `status`, `estimated_delivery`, `nickname`, `note`, `archived`, `deleted`, `last_updated`.
 
----
-
 ## Email forwarding rules (Cloudflare)
 
 | Address | Action | Destination |
@@ -125,6 +226,8 @@ Columns: `id`, `user_id`, `tracking_number`, `carrier`, `merchant`, `status`, `e
 Brevo authentication adds 4 DNS records under `onthewayapp.net`: `brevo-code` TXT, `brevo1._domainkey` CNAME, `brevo2._domainkey` CNAME, `_dmarc` TXT.
 
 ---
+
+# Part 3 — Decisions and current state
 
 ## Key decisions
 
@@ -139,7 +242,13 @@ Brevo authentication adds 4 DNS records under `onthewayapp.net`: `brevo-code` TX
 - **SwipeablePackageCard PanResponder claim threshold:** only claim the gesture after horizontal movement > 5px AND horizontal > vertical. Lets taps fall through to the inner TouchableOpacity, lets vertical scroll pass through, still catches swipes. (Previously claimed all touches at start, killing taps.)
 - **Backend `PATCH /api/packages/:id` accepts `merchant`** so the in-app "Who it came from" field can override the parsed value. Commit `e085e06`.
 
----
+## Strategic conflicts to resolve
+
+Items currently live or queued that don't match the three pillars. Resolve before continuing in that area.
+
+1. **AdSlot placeholder is live + Task #48 (real AdMob) queued → conflicts with Pillar 3 ("No ads, no data selling").** The placeholder banner ships today in `App.js` (`AdSlot` component, middle of Active list). Recommendation pending Cliff's decision: drop ads entirely, monetize via household subscription (primary) + B2B landlord tier (secondary). See task #51.
+2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar 2.** Tracking 3.2 looks up status for already-known tracking numbers. Pillar 2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — different products that pull packages by address. Task #49 is useful as live-status enrichment for known packages, but the headline differentiator is task #52.
+3. **Current email-forwarding ingest model isn't Pillar 2 either.** Better than Route/AfterShip's inbox scraping (user actively forwards rather than us reading their inbox), but still email-based. Keep as a transitional / complementary input; do not market it as the primary mechanism.
 
 ## Production readiness checklist (before Play Store submit)
 
@@ -159,18 +268,6 @@ Brevo authentication adds 4 DNS records under `onthewayapp.net`: `brevo-code` TX
 - [x] **support@onthewayapp.net inbound** (Cloudflare Email Routing → Gmail).
 - [x] **support@onthewayapp.net outbound** (Brevo + Gmail Send-as, DKIM/DMARC verified).
 - [x] **Backend email parser data quality** (carrier detection tightened, junk rows cleaned in Supabase).
-
----
-
-## Strategic conflicts to resolve
-
-Items currently live or queued that don't match the marketing angle doc. Resolve before continuing in that area.
-
-1. **AdSlot placeholder is live + Task #48 (real AdMob) queued → conflicts with Pillar #3 ("No ads, no data selling").** The placeholder banner ships today in `App.js` (`AdSlot` component, middle of Active list). Recommendation pending Cliff's decision: drop ads entirely, monetize via household subscription (primary) + B2B landlord tier (secondary). See task #51.
-2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar #2.** Tracking 3.2 looks up status for already-known tracking numbers. Pillar #2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — different products that pull packages by address. Task #49 is useful as live-status enrichment for known packages, but the headline differentiator is task #52.
-3. **Current email-forwarding ingest model isn't Pillar #2 either.** Better than Route/AfterShip's inbox scraping (user actively forwards rather than us reading their inbox), but still email-based. Keep as a transitional / complementary input; do not market it as the primary mechanism.
-
----
 
 ## Active work
 
@@ -193,6 +290,8 @@ Items currently live or queued that don't match the marketing angle doc. Resolve
 - Backend changes: revert in `cg1980-cyber/on-the-way-backend`; Railway auto-redeploys on push.
 
 ---
+
+# Part 4 — Appendix
 
 ## Command cheatsheet
 
@@ -218,14 +317,10 @@ eas env:list production
 eas whoami
 ```
 
----
-
 ## History snapshot
 
-Short timeline of major milestones. Not exhaustive — for any specific decision-detail, search this file (it's all here in "Key decisions" or in the active section).
+Short timeline of major milestones. Not exhaustive — for any specific decision-detail, search this file (it's all here in "Key decisions" or in the active section). For commit-level detail, the GitHub history on `on-the-way-mobile` and `on-the-way-backend` is the ground truth.
 
 - **April 2026** — `note` field added to Supabase schema + mobile UI + backend PATCH. Initial card preview of note.
 - **2026-05-18** — Backend JWT auth fixed (JWKS/ES256 cutover). Password reset page built and shipped via GitHub Pages. Railway revived after trial expired (upgraded to Hobby). Frontend dedup filter relaxed so packages without tracking numbers still appear.
-- **2026-05-23** — Email parser overhaul (carrier detection + field-name fix + `isShipping` gate); 10 junk rows archived in Supabase. Detail screen made editable for "What it is" / "Who it came from" / "Reference Note"; deleted packages show restore-to-edit banner. SwipeablePackageCard tap-stealing PanResponder fixed; swipe-action layer moved behind cards. Cards now stack all populated fields visibly. Tracking numbers became carrier-aware hyperlinks (USPS/UPS/FedEx/DHL + 17track fallback). AdSlot placeholder shipped (later flagged as Pillar 3 conflict). Brevo + Gmail Send-as wired up for outbound from `support@onthewayapp.net`. USPS BCG online signup failed on identity verification; MSSC ticket sent from support@ for manual creation. Marketing angle doc uploaded and made the strategic source of truth; three pillars formalized; monetization conversation landed on household subscription as the recommended primary model.
-
-For commit-level detail not captured here, the GitHub history on `on-the-way-mobile` and `on-the-way-backend` is the ground truth.
+- **2026-05-23** — Email parser overhaul (carrier detection + field-name fix + `isShipping` gate); 10 junk rows archived in Supabase. Detail screen made editable for "What it is" / "Who it came from" / "Reference Note"; deleted packages show restore-to-edit banner. SwipeablePackageCard tap-stealing PanResponder fixed; swipe-action layer moved behind cards. Cards now stack all populated fields visibly. Tracking numbers became carrier-aware hyperlinks (USPS/UPS/FedEx/DHL + 17track fallback). AdSlot placeholder shipped (later flagged as Pillar 3 conflict). Brevo + Gmail Send-as wired up for outbound from `support@onthewayapp.net`. USPS BCG online signup failed on identity verification; MSSC ticket sent from support@ for manual creation. Marketing angle content formalized into this doc as the strategic source of truth; three pillars locked in; monetization conversation landed on household subscription as the recommended primary model.
