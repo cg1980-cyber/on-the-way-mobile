@@ -1,6 +1,6 @@
 # Session notes — 2026-05-23 ("On The Way — package tracking app")
 
-_Companion to `2026-05-23_on-the-way_session.md`. PROJECT_STATE.md is the working source of truth; this file captures the non-obvious reasoning and side details from the chat that PROJECT_STATE.md's summary form deliberately leaves out, so they're not lost if the chat memory ages out._
+_Companion to `2026-05-23_full_transcript.md` (the complete chronological chat export, 14,390 lines, 1,193 user/assistant exchanges, covering the entire arc from the opening JWT_SECRET troubleshooting through the final PROJECT_STATE.md refactor and project handoff). PROJECT_STATE.md is the working source of truth; the full transcript is the audit trail; this file is the middle layer — distilled non-obvious reasoning and side details that PROJECT_STATE.md's summary form deliberately leaves out, kept here so you don't have to re-skim 14k lines to find them._
 
 ## 1. The full monetization conversation
 
