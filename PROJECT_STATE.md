@@ -4,6 +4,8 @@ _Last updated: 2026-05-23_
 
 > **Claude: read this file first, every session, before doing anything else.** It's the only continuity layer between sessions. The full chat transcripts in `/sessions/.../.claude/projects/` are the raw record, but this curated summary is what gets you back up to speed fastest.
 >
+> **Also read `On_the_Way_Marketing_Angle.docx` (in this same folder) before any conversation about features, scope, marketing, positioning, MVP priorities, competitive landscape, pitch material, or strategic trade-offs.** That doc is the strategic source of truth. Ground responses in its three pillars (household-first design, address-based carrier authorization, privacy-first positioning) and flag conflicts directly. If decisions in a session change or expand the strategy, offer to update the doc so it stays current.
+>
 > **Keep it updated as you work** — don't wait for the user to ask. Append to "Session log" whenever you reach a meaningful milestone (resolved issue, decision made, change shipped, new direction chosen). Refresh "Where we left off" at the end of each session, or any time you're about to be context-consolidated. If you can feel the context window filling up mid-task, that is the cue to write to this file before continuing.
 >
 > Commit and push the file at the end of each session so it travels with the repo on GitHub. The user runs the commit from their own terminal (sandbox can't always remove `.git/index.lock` itself).
@@ -257,6 +259,16 @@ For all events prior to this session, see the task list (`#1`–`#43` in Claude'
 ## Where we left off (2026-05-23, end of session — long day)
 
 App is fully working end-to-end with the new visual round shipped. Brevo is wired up for outbound from `support@onthewayapp.net`. MSSC ticket sent to USPS to manually create the BCG account; awaiting their reply (Mon 2026-05-25 at earliest).
+
+Cliff also uploaded a marketing strategy doc (`On_the_Way_Marketing_Angle.docx`, in this same folder) and gave it standing-instruction status — it's the source of truth for feature/scope/marketing decisions going forward.
+
+### ⚠️ Strategic conflicts flagged at session end (resolve next session)
+
+Per the marketing angle doc's three pillars, two pieces of in-flight work currently conflict with the strategy. Both should be revisited before continuing.
+
+1. **AdSlot placeholder (live) + Task #48 (real AdMob) conflict with Pillar #3 (Privacy-First).** The doc says explicitly "No ads, no data selling" as a proof point for the "We never read your email" message. Need a decision: kill the ad slot entirely, or rewrite the strategy to allow tasteful ads. Currently `AdSlot` ships in `App.js` as a placeholder banner in the middle of the Active list.
+2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar #2 (Address-Based Carrier Auth).** Tracking 3.2 looks up status for tracking numbers we already have via email forwarding. Pillar #2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — a different USPS product (and different carrier products) that gives address-based visibility without requiring a tracking number. Task #49 is still worth doing as live-status enrichment, but the MVP differentiator (Pillar #2) is a separate, bigger architectural item that isn't queued yet.
+3. **The current email-forwarding ingest model isn't pillar #2 either.** It's better than Route/AfterShip's inbox-scraping (user actively forwards rather than us reading their inbox), but the household-first + address-based pillars require the carrier-auth pipeline. Probably keep email forwarding as a transitional or complementary input source; don't market it as the primary mechanism.
 
 **Open/queued items (no priority order — pick what you want next):**
 
