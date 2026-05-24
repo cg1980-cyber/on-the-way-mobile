@@ -246,9 +246,10 @@ Brevo authentication adds 4 DNS records under `onthewayapp.net`: `brevo-code` TX
 
 Items currently live or queued that don't match the three pillars. Resolve before continuing in that area.
 
-1. **AdSlot placeholder is live + Task #48 (real AdMob) queued → conflicts with Pillar 3 ("No ads, no data selling").** The placeholder banner ships today in `App.js` (`AdSlot` component, middle of Active list). Recommendation pending Cliff's decision: drop ads entirely, monetize via household subscription (primary) + B2B landlord tier (secondary). See task #51.
+1. **AdSlot placeholder is live + Task #48 (real AdMob) queued → hard conflict with Pillar 3 ("No ads, no data selling").** The placeholder banner ships today in `App.js` (`AdSlot` component, middle of Active list). The placeholder alone signals "ads coming soon" to current beta users, which undercuts the message before any real ad ships. Recommendation pending Cliff's decision: drop ads entirely, monetize via household subscription (primary) + B2B landlord tier (secondary). See task #51. If subscription wins, repurpose the AdSlot real estate for subscription-promo content ("Invite a household member to share your feed" / "Upgrade to track unlimited packages") instead of just deleting it.
 2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar 2.** Tracking 3.2 looks up status for already-known tracking numbers. Pillar 2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — different products that pull packages by address. Task #49 is useful as live-status enrichment for known packages, but the headline differentiator is task #52.
-3. **Current email-forwarding ingest model isn't Pillar 2 either.** Better than Route/AfterShip's inbox scraping (user actively forwards rather than us reading their inbox), but still email-based. Keep as a transitional / complementary input; do not market it as the primary mechanism.
+3. **Current email-forwarding ingest model → soft conflict with Pillar 3 ("We never read your email").** Better than Route/AfterShip's inbox scraping (user actively forwards rather than us reading their inbox), but still email-based. Defensible today, fully resolved by Pillar 2 (address-based carrier auth) replacing email ingest entirely. Keep as a transitional / complementary input; do not market the "we never read your email" line in any public-facing copy until Pillar 2 lands.
+4. **Cloud-first storage → soft conflict with Pillar 3 ("Local storage where possible").** Every package currently lives in Supabase; mobile pulls fresh on each open + pull-to-refresh, no local cache. Marketing line says "where possible" so it's not a lie, but the honest answer to "what's on your servers?" is "all of it, indefinitely." Long-term shift to local-first cache + cloud sync is a meaningful architectural change; not blocking today, but flag it before committing to the line in public copy.
 
 ## Production readiness checklist (before Play Store submit)
 
@@ -284,6 +285,8 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 7. **Pre-launch production readiness** — see checklist above.
 8. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; either move hidden actions into SwipeListView's `renderHiddenItem` or drop SwipeListView for plain FlatList.
 
+**Loose end worth a 30-second check next time the app is open:** the in-app provider instructions should now display Cliff's actual tracking email (`cgiles1998.a940d0@onthewayapp.net`) instead of the generic `packages@onthewayapp.net`. The fix was conditional on the JWT cutover landing (which it did on 2026-05-18), but end-to-end verification was never explicitly confirmed.
+
 **Rollback notes if anything regresses:**
 - Junk-row archive is reversible: `UPDATE packages SET archived = false WHERE archived = true AND last_updated >= '2026-05-23'`.
 - Mobile changes: revert the relevant commit in `cg1980-cyber/on-the-way-mobile` and republish a previous EAS update (`eas update --branch preview --republish --group <previous-group-id>`; group IDs in EAS dashboard).
@@ -292,6 +295,13 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 ---
 
 # Part 4 — Appendix
+
+## Chat archive
+
+Prior-chat transcripts and synthesized session notes live in `chat-archive/`. When in doubt about *why* a past decision was made and the rationale isn't in "Key decisions" above, check there before assuming.
+
+- `2026-05-23_full_transcript.md` — complete chronological export of the "On The Way — package tracking app" chat (14,390 lines, 1,193 exchanges; covers JWT cutover → password reset page → Cloudflare/email → Railway revival → frontend dedup → editable detail screen → tap fix → AdSlot → Brevo + MSSC → marketing strategy + monetization → this PROJECT_STATE.md refactor). SMTP key redacted.
+- `2026-05-23_session_notes.md` — distilled non-obvious reasoning from that chat (full ranked monetization menu, the three Pillar 3 conflicts broken down, Brevo/Gmail operational gotchas, exact MSSC ticket text, etc.). Easier to skim than the full transcript.
 
 ## Command cheatsheet
 
