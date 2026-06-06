@@ -123,14 +123,18 @@ Route or AfterShip could add address-based carrier authorization at any time. Th
 
 ## Monetization direction
 
-**Recommended (decision pending — see Active work, task #51):**
+**Decided 2026-06-05 — phased approach.**
+
+**Phase 1 — Beta era (now → V1 launch). "Free during beta." No ads, no paywall, no monetization.** Communicate openly that subscription comes when V1 ships. Beta lasts as long as needed to stabilize, recruit testers, ship Pillar 1 (household accounts) and Pillar 2 (address-based carrier auth), and prove product quality. Rationale: don't charge users for an unfinished product, and don't burn Pillar 3 with ads during the proving phase. The "we're investing before asking you to pay" narrative actively reinforces the privacy-first positioning.
+
+**Phase 2 — V1 onward.**
 
 - **Primary: household subscription / freemium.** Free tier covers a single user with limited features. Paid tier (~$20–40/year per household) unlocks household members, gift mode, anti-theft tools, longer history. Aligns with Pillar 1 (household-first) — pricing follows the same unit the product is built around. Mental model: Apple Family / Spotify Family.
 - **Secondary: B2B landlord tier.** Property managers, apartment buildings, dorms, HOAs — anywhere multiple households share a delivery surface. Different product surface, higher price per door, parallel revenue stream, no consumer privacy compromise.
 - **In reserve:** user-initiated affiliate (claims, insurance, hardware partners), hardware bundle partnerships (Ring/Eufy/Nest doorbells).
 - **Off the table per Pillar 3:** display ads, behavioral targeting, data selling, tracked affiliate.
 
-This recommendation supersedes the earlier plan ("small-format ad monetization") which conflicted with Pillar 3. Cliff has the call on whether to accept the recommendation or revise the strategy.
+**V1 trigger** (when Phase 2 monetization activates): Pillar 1 + Pillar 2 shipped, parser and tracking stable, internal-testing-track feedback positive, production-readiness checklist green. No fixed date — quality bar, not a calendar.
 
 ---
 
@@ -241,15 +245,17 @@ Brevo authentication adds 4 DNS records under `onthewayapp.net`: `brevo-code` TX
 - **Email parser quality (2026-05-23 fix):** word-boundary carrier detection (no more substring matches on `ups` inside `groups`), snake_case field names matched between parser and server.js, new `isShipping` gate so non-shipping emails are skipped instead of becoming junk rows. Merchant blocklist (`gmail`, `yahoo`, `iphone`, etc.) prevents generic providers from being stored as merchants.
 - **SwipeablePackageCard PanResponder claim threshold:** only claim the gesture after horizontal movement > 5px AND horizontal > vertical. Lets taps fall through to the inner TouchableOpacity, lets vertical scroll pass through, still catches swipes. (Previously claimed all touches at start, killing taps.)
 - **Backend `PATCH /api/packages/:id` accepts `merchant`** so the in-app "Who it came from" field can override the parsed value. Commit `e085e06`.
+- **Monetization decided 2026-06-05 — "Free during beta" (Option D).** No ads, no paywall, no monetization during beta. Subscription (household primary, B2B landlord secondary) activates at V1 when Pillars 1+2 ship and production-readiness checklist clears. Reason: don't charge for an unfinished product; don't burn Pillar 3 with ads during the proving phase; the "investing before charging" narrative reinforces privacy-first positioning. AdMob ruled out permanently — AdMob's Advertising ID + behavioral targeting data flow contradicts "no data selling." Considered and rejected: ads now / remove with premium later (burns Pillar 3 the moment first banner ships, hard to walk back), subscription now (charges for unfinished product), lifetime purchase only (gives up recurring revenue model that fits household-first pricing).
 
 ## Strategic conflicts to resolve
 
 Items currently live or queued that don't match the three pillars. Resolve before continuing in that area.
 
-1. **AdSlot placeholder is live + Task #48 (real AdMob) queued → hard conflict with Pillar 3 ("No ads, no data selling").** The placeholder banner ships today in `App.js` (`AdSlot` component, middle of Active list). The placeholder alone signals "ads coming soon" to current beta users, which undercuts the message before any real ad ships. Recommendation pending Cliff's decision: drop ads entirely, monetize via household subscription (primary) + B2B landlord tier (secondary). See task #51. If subscription wins, repurpose the AdSlot real estate for subscription-promo content ("Invite a household member to share your feed" / "Upgrade to track unlimited packages") instead of just deleting it.
-2. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar 2.** Tracking 3.2 looks up status for already-known tracking numbers. Pillar 2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — different products that pull packages by address. Task #49 is useful as live-status enrichment for known packages, but the headline differentiator is task #52.
-3. **Current email-forwarding ingest model → soft conflict with Pillar 3 ("We never read your email").** Better than Route/AfterShip's inbox scraping (user actively forwards rather than us reading their inbox), but still email-based. Defensible today, fully resolved by Pillar 2 (address-based carrier auth) replacing email ingest entirely. Keep as a transitional / complementary input; do not market the "we never read your email" line in any public-facing copy until Pillar 2 lands.
-4. **Cloud-first storage → soft conflict with Pillar 3 ("Local storage where possible").** Every package currently lives in Supabase; mobile pulls fresh on each open + pull-to-refresh, no local cache. Marketing line says "where possible" so it's not a lie, but the honest answer to "what's on your servers?" is "all of it, indefinitely." Long-term shift to local-first cache + cloud sync is a meaningful architectural change; not blocking today, but flag it before committing to the line in public copy.
+1. **Task #49 (USPS Tracking 3.2 API) is enrichment, not Pillar 2.** Tracking 3.2 looks up status for already-known tracking numbers. Pillar 2 is USPS *Informed Delivery* + UPS *My Choice* + FedEx *Delivery Manager* — different products that pull packages by address. Task #49 is useful as live-status enrichment for known packages, but the headline differentiator is task #52.
+2. **Current email-forwarding ingest model → soft conflict with Pillar 3 ("We never read your email").** Better than Route/AfterShip's inbox scraping (user actively forwards rather than us reading their inbox), but still email-based. Defensible today, fully resolved by Pillar 2 (address-based carrier auth) replacing email ingest entirely. Keep as a transitional / complementary input; do not market the "we never read your email" line in any public-facing copy until Pillar 2 lands.
+3. **Cloud-first storage → soft conflict with Pillar 3 ("Local storage where possible").** Every package currently lives in Supabase; mobile pulls fresh on each open + pull-to-refresh, no local cache. Marketing line says "where possible" so it's not a lie, but the honest answer to "what's on your servers?" is "all of it, indefinitely." Long-term shift to local-first cache + cloud sync is a meaningful architectural change; not blocking today, but flag it before committing to the line in public copy.
+
+**Resolved 2026-06-05:** AdSlot/AdMob vs. Pillar 3 conflict — closed via Option D ("Free during beta"). See Key decisions and Monetization direction. Follow-on tasks: remove `AdSlot` component from `App.js`, ship via EAS update, close task #48 (AdMob) as won't-do, add visible "BETA" indicator to the app.
 
 ## Production readiness checklist (before Play Store submit)
 
@@ -264,7 +270,8 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - [ ] **Sentry or equivalent** for crash reporting.
 - [ ] **Rate limiting** on backend webhook + API endpoints.
 - [ ] **WEBHOOK_SECRET rotation plan** documented.
-- [ ] **Monetization implementation** — implement chosen path from task #51 (subscription paywall + Stripe/Apple/Google billing integration, OR ads if strategy revises).
+- [ ] **Monetization implementation** — at V1 launch, ship household subscription paywall (Stripe via web checkout OR Google Play Billing for in-app subscription; pick at implementation time). Beta era ships with no monetization per 2026-06-05 decision.
+- [ ] **In-app "BETA" indicator** — small visible badge or label so users understand the current state matches the "Free during beta" messaging. Either a corner tag on the home screen, a "Beta" suffix on the app title, or a one-time onboarding modal. Implementation TBD.
 - [x] **Password reset link works end-to-end** (GitHub Pages reset page + Supabase URL config).
 - [x] **support@onthewayapp.net inbound** (Cloudflare Email Routing → Gmail).
 - [x] **support@onthewayapp.net outbound** (Brevo + Gmail Send-as, DKIM/DMARC verified).
@@ -272,18 +279,19 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 
 ## Active work
 
-**Next action when work resumes:** decide task #51 (monetization), since it unblocks AdSlot cleanup and informs subscription-paywall UI design.
+**Next action when work resumes:** ship the AdSlot removal + BETA indicator as a single EAS update — this realigns the live app with the 2026-06-05 monetization decision. Then start task #53 (Pillar 1 household accounts) as the next major build.
 
 **Open / queued items in suggested order:**
 
-1. **Task #51 — Monetization decision.** Drop ads vs. revise strategy. Recommended path on file: household subscription + B2B landlord, no ads.
-2. **Task #53 — Pillar 1 (Household accounts).** Multi-member, shared feed, per-person filtering, gift mode. No external dependencies — can start anytime. Large schema/auth/UI change.
-3. **Task #49 — Live tracking status refresh.** Blocked on USPS MSSC reply (Mon 2026-05-25 at earliest). When BCG creds arrive: subscribe Tracking 3.2 on https://developer.usps.com, paste client_id + client_secret, we wire it in ~30 min. Fallback if MSSC stalls: AfterShip free tier (100 trackings/month, all carriers).
-4. **Task #52 — Pillar 2 (Address-based carrier auth).** The headline MVP differentiator. Requires USPS Informed Delivery + UPS My Choice + FedEx Delivery Manager API access, each with its own business-account approval cycle. Multi-week timeline. Starts after USPS BCG account exists.
-5. **Task #48 — Real AdMob.** Likely closes as "won't do" depending on #51.
+1. **AdSlot cleanup + BETA indicator (immediate, single EAS update).** Remove the `AdSlot` component and its placement(s) in `App.js`. Add a visible "BETA" indicator (corner tag, app-title suffix, or onboarding modal — pick one at implementation time). Ship via `eas update --branch preview --message "Remove AdSlot, add BETA indicator (free-during-beta)"`. No native rebuild required.
+2. **Task #48 — Real AdMob — CLOSE AS WON'T DO.** Superseded by the 2026-06-05 "Free during beta" decision. Document closure reason in task tracker.
+3. **Task #53 — Pillar 1 (Household accounts).** Multi-member, shared feed, per-person filtering, gift mode. No external dependencies — the next major build. Large schema/auth/UI change.
+4. **Task #49 — Live tracking status refresh.** Status of USPS MSSC reply unknown as of 2026-06-05 (13+ days since ticket sent). Check `support@onthewayapp.net` first. If BCG creds arrived: subscribe Tracking 3.2 on https://developer.usps.com, paste client_id + client_secret, ~30 min to wire in. If MSSC has effectively stalled: pivot to AfterShip free tier (100 trackings/month, all carriers).
+5. **Task #52 — Pillar 2 (Address-based carrier auth).** The headline MVP differentiator. Requires USPS Informed Delivery + UPS My Choice + FedEx Delivery Manager API access, each with its own business-account approval cycle. Multi-week timeline. Starts after USPS BCG account exists.
 6. **Visual polish** — anytime Cliff flags something.
 7. **Pre-launch production readiness** — see checklist above.
-8. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; either move hidden actions into SwipeListView's `renderHiddenItem` or drop SwipeListView for plain FlatList.
+8. **V1 trigger** — when Pillars 1 + 2 ship, parser/tracking stable, internal-testing-track feedback positive, and production-readiness checklist clears, flip from beta to V1: implement subscription paywall, swap "BETA" indicator for V1 launch messaging.
+9. **Architectural cleanup (low priority).** SwipeListView + SwipeablePackageCard's internal PanResponder are duplicative; either move hidden actions into SwipeListView's `renderHiddenItem` or drop SwipeListView for plain FlatList.
 
 **Loose end worth a 30-second check next time the app is open:** the in-app provider instructions should now display Cliff's actual tracking email (`cgiles1998.a940d0@onthewayapp.net`) instead of the generic `packages@onthewayapp.net`. The fix was conditional on the JWT cutover landing (which it did on 2026-05-18), but end-to-end verification was never explicitly confirmed.
 
@@ -334,3 +342,4 @@ Short timeline of major milestones. Not exhaustive — for any specific decision
 - **April 2026** — `note` field added to Supabase schema + mobile UI + backend PATCH. Initial card preview of note.
 - **2026-05-18** — Backend JWT auth fixed (JWKS/ES256 cutover). Password reset page built and shipped via GitHub Pages. Railway revived after trial expired (upgraded to Hobby). Frontend dedup filter relaxed so packages without tracking numbers still appear.
 - **2026-05-23** — Email parser overhaul (carrier detection + field-name fix + `isShipping` gate); 10 junk rows archived in Supabase. Detail screen made editable for "What it is" / "Who it came from" / "Reference Note"; deleted packages show restore-to-edit banner. SwipeablePackageCard tap-stealing PanResponder fixed; swipe-action layer moved behind cards. Cards now stack all populated fields visibly. Tracking numbers became carrier-aware hyperlinks (USPS/UPS/FedEx/DHL + 17track fallback). AdSlot placeholder shipped (later flagged as Pillar 3 conflict). Brevo + Gmail Send-as wired up for outbound from `support@onthewayapp.net`. USPS BCG online signup failed on identity verification; MSSC ticket sent from support@ for manual creation. Marketing angle content formalized into this doc as the strategic source of truth; three pillars locked in; monetization conversation landed on household subscription as the recommended primary model.
+- **2026-06-05** — Monetization decision locked: "Free during beta" (Option D). No ads, no paywall, no monetization during beta era; subscription activates at V1 launch when Pillars 1+2 ship and production-readiness clears. AdMob ruled out permanently. AdSlot removal + BETA indicator queued as next EAS update; task #48 (AdMob) closed as won't-do. Full prior-chat transcript and synthesized session notes archived to `chat-archive/` so the project is fully self-contained.

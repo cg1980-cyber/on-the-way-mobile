@@ -189,25 +189,6 @@ async function openTrackingLink(pkg) {
   }
 }
 
-// Placeholder ad slot. When real AdMob is wired up (requires a native rebuild
-// and a configured AdMob account + ad-unit ID), swap the body for a
-// <BannerAd .../> from react-native-google-mobile-ads. The visual styling
-// here intentionally signals "ad" to the user (SPONSORED label) so it doesn't
-// get confused for a package card.
-function AdSlot() {
-  return (
-    <TouchableOpacity
-      style={styles.adSlot}
-      activeOpacity={0.85}
-      onPress={() => Linking.openURL('https://onthewayapp.net')}
-    >
-      <Text style={styles.adSlotLabel}>SPONSORED</Text>
-      <Text style={styles.adSlotTitle}>Your ad here</Text>
-      <Text style={styles.adSlotSubtitle}>Tap to learn more</Text>
-    </TouchableOpacity>
-  );
-}
-
 function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArchived = false, isDeleted = false }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const panResponder = useRef(
@@ -1081,7 +1062,7 @@ export default function App() {
         <View style={styles.header}>
           <View style={styles.headerLogoContainer}>
             <HousePathLogo size={28} />
-            <Text style={styles.headerLogoText}>On the Way</Text>
+            <Text style={styles.headerLogoText}>On the Way (Beta)</Text>
           </View>
           <TouchableOpacity onPress={() => setScreen('settings')}>
             <Text style={styles.settingsIcon}>⚙️</Text>
@@ -1113,8 +1094,6 @@ export default function App() {
           activePackages.length === 0 ? (
             <ScrollView style={styles.emptyStateScroll}>
               <View style={styles.emptyContent}>
-                {/* Ad slot — top of the empty state, below the tab bar */}
-                <AdSlot />
                 <Text style={styles.emptyIcon}>📦</Text>
                 <Text style={styles.emptyTitle}>No packages yet</Text>
 
@@ -1163,21 +1142,9 @@ export default function App() {
             </ScrollView>
           ) : (
             <SwipeListView
-              data={(() => {
-                // Insert a single ad slot in the middle of the active list.
-                // For a 1-card list, put the ad after it. For 0, nothing
-                // (we render the empty state above instead).
-                if (activePackages.length === 0) return activePackages;
-                const mid = Math.max(1, Math.floor(activePackages.length / 2));
-                return [
-                  ...activePackages.slice(0, mid),
-                  { id: '__ad_active__', __ad: true },
-                  ...activePackages.slice(mid),
-                ];
-              })()}
+              data={activePackages}
               keyExtractor={item => item.id}
               renderItem={({ item }) => {
-                if (item.__ad) return <AdSlot />;
                 return (
                   <SwipeablePackageCard
                     item={item}
@@ -1372,20 +1339,6 @@ const styles = StyleSheet.create({
   packageFromSubtle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   trackingNumberLink: { fontSize: 11, color: colors.primary, marginTop: 4, fontFamily: 'monospace', textDecorationLine: 'underline' },
   detailValueLink: { fontSize: 15, color: colors.primary, marginBottom: 8, textDecorationLine: 'underline' },
-  adSlot: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-    borderWidth: 1,
-    borderRadius: 8,
-    marginHorizontal: 12,
-    marginVertical: 8,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  adSlotLabel: { fontSize: 10, fontWeight: '700', color: '#f59e0b', letterSpacing: 1.2, marginBottom: 4 },
-  adSlotTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 2 },
-  adSlotSubtitle: { fontSize: 12, color: colors.textMuted },
   restoreToEditTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
   restoreToEditBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   authHelpRow: { marginTop: 16, alignItems: 'center', gap: 10 },
