@@ -183,9 +183,17 @@ Secrets live in `.env` (local) and EAS env vars under the `production` environme
 
 ### Day-to-day workflow
 
+**Editing model — mobile is local-first, backend is cloud-first.**
+- **Mobile (`on-the-way`):** edit locally in `C:\Users\hicli\on-the-way` (App.js is too large for the GitHub web editor to be ergonomic). Ship via `eas update`, then commit + push to GitHub so the source SoT stays in sync.
+- **Backend (`on-the-way-backend`):** typically edited directly via GitHub's web editor — no local clone required. Railway auto-redeploys on push to main. Local clone exists at `C:\Users\hicli\on-the-way-backend` but is currently behind remote; only matters if doing local backend work.
+- **Runtime is fully cloud-hosted:** source SoT on GitHub, backend runtime on Railway, DB + auth on Supabase, mobile bundle distribution on Expo CDN, email infra on Cloudflare + Brevo, password reset page on GitHub Pages.
+
+**Mobile ship loop:**
+
 1. Edit JS/styles on laptop in `C:\Users\hicli\on-the-way`.
 2. `eas update --branch preview --message "what changed"` — bundles & uploads to Expo CDN (~1 min).
 3. Force-close app on phone, reopen — auto-fetches the new bundle on launch.
+4. `git add … && git commit -m "…" && git push` from `C:\Users\hicli\on-the-way` so the source SoT on GitHub matches what's live.
 
 ### Rebuild required only when
 
@@ -279,14 +287,18 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 
 ## Active work
 
-**Next action when work resumes:** ship the AdSlot removal + BETA indicator as a single EAS update — this realigns the live app with the 2026-06-05 monetization decision. Then start task #53 (Pillar 1 household accounts) as the next major build.
+**Next action when work resumes:** decide the scope tier for task #53 (Pillar 1 household accounts) before touching code. Cliff to sleep on it; recommendation on file is MVP-aligned tier (~1–2 weeks of evenings, delivers what the marketing doc promises without long-tail edge cases). Once tier is picked, design the schema + RLS policies together before any code lands — that's the load-bearing decision and the painful one to get wrong. Also quick: check `support@onthewayapp.net` for an MSSC reply (now 13+ days since ticket sent); if BCG creds arrived, we can slot task #49 in ahead of #53.
 
 **Open / queued items in suggested order:**
 
 1. **AdSlot cleanup + BETA indicator (immediate, single EAS update).** Remove the `AdSlot` component and its placement(s) in `App.js`. Add a visible "BETA" indicator (corner tag, app-title suffix, or onboarding modal — pick one at implementation time). Ship via `eas update --branch preview --message "Remove AdSlot, add BETA indicator (free-during-beta)"`. No native rebuild required.
 2. **Task #48 — Real AdMob — CLOSE AS WON'T DO.** Superseded by the 2026-06-05 "Free during beta" decision. Document closure reason in task tracker.
-3. **Task #53 — Pillar 1 (Household accounts).** Multi-member, shared feed, per-person filtering, gift mode. No external dependencies — the next major build. Large schema/auth/UI change.
-4. **Task #49 — Live tracking status refresh.** Status of USPS MSSC reply unknown as of 2026-06-05 (13+ days since ticket sent). Check `support@onthewayapp.net` first. If BCG creds arrived: subscribe Tracking 3.2 on https://developer.usps.com, paste client_id + client_secret, ~30 min to wire in. If MSSC has effectively stalled: pivot to AfterShip free tier (100 trackings/month, all carriers).
+3. **Task #53 — Pillar 1 (Household accounts).** Multi-member, shared feed, per-person filtering, gift mode. No external dependencies — the next major build. Three scope tiers discussed 2026-06-05:
+   - **Minimum viable** (~4–6 focused hours / 3–5 days of evenings): owner + add member by user ID + shared visibility. No filtering, no gift mode, no invites. Validates concept; weak on marketing promise.
+   - **MVP-aligned** (~8–12 focused hours / 1–2 weeks of evenings) — **recommended**: owner creates household, invites via 6-char invite code, per-member filter chips on active list, manual member assignment from detail screen, basic gift mode, migration for existing data.
+   - **Full version** (~15–30 focused hours / 2–3 weeks of evenings): everything above plus email invitations, parser smart-routing by shipping-address name, member roles, departure/handoff logic.
+   Sub-tasks regardless of tier: schema design (`households` + `household_members` + `household_id` on packages + `recipient_member_id` + `hidden_from`), RLS rewrites in Supabase, backend CRUD + invitation endpoints, mobile settings UI, per-member filter, gift toggle, migration script, onboarding update.
+4. **Task #49 — Live tracking status refresh.** Status of USPS MSSC reply unknown as of 2026-06-05 (13+ days since ticket sent). Check `support@onthewayapp.net` first. If BCG creds arrived: subscribe Tracking 3.2 on https://developer.usps.com, paste client_id + client_secret, ~30 min to wire in. If MSSC has effectively stalled: pivot to AfterShip free tier (100 trackings/month, all carriers). **AfterShip notes:** REST API, 700+ carriers, free tier = 100 *new* tracking numbers/month (one-time charge per registered number, not per status check; status updates flow automatically once registered). One-API replaces per-carrier wire-ups. Pillar 3 clean — their consumer app does email scraping but the API product doesn't; we send tracking numbers we already have, they return status, no data flow contradicts "no data selling." Alternatives in same category if AfterShip outgrows: ShipEngine (~250/mo free), EasyPost (basic tier), 17track. Default to AfterShip for carrier coverage + integration simplicity.
 5. **Task #52 — Pillar 2 (Address-based carrier auth).** The headline MVP differentiator. Requires USPS Informed Delivery + UPS My Choice + FedEx Delivery Manager API access, each with its own business-account approval cycle. Multi-week timeline. Starts after USPS BCG account exists.
 6. **Visual polish** — anytime Cliff flags something.
 7. **Pre-launch production readiness** — see checklist above.
@@ -342,4 +354,4 @@ Short timeline of major milestones. Not exhaustive — for any specific decision
 - **April 2026** — `note` field added to Supabase schema + mobile UI + backend PATCH. Initial card preview of note.
 - **2026-05-18** — Backend JWT auth fixed (JWKS/ES256 cutover). Password reset page built and shipped via GitHub Pages. Railway revived after trial expired (upgraded to Hobby). Frontend dedup filter relaxed so packages without tracking numbers still appear.
 - **2026-05-23** — Email parser overhaul (carrier detection + field-name fix + `isShipping` gate); 10 junk rows archived in Supabase. Detail screen made editable for "What it is" / "Who it came from" / "Reference Note"; deleted packages show restore-to-edit banner. SwipeablePackageCard tap-stealing PanResponder fixed; swipe-action layer moved behind cards. Cards now stack all populated fields visibly. Tracking numbers became carrier-aware hyperlinks (USPS/UPS/FedEx/DHL + 17track fallback). AdSlot placeholder shipped (later flagged as Pillar 3 conflict). Brevo + Gmail Send-as wired up for outbound from `support@onthewayapp.net`. USPS BCG online signup failed on identity verification; MSSC ticket sent from support@ for manual creation. Marketing angle content formalized into this doc as the strategic source of truth; three pillars locked in; monetization conversation landed on household subscription as the recommended primary model.
-- **2026-06-05** — Monetization decision locked: "Free during beta" (Option D). No ads, no paywall, no monetization during beta era; subscription activates at V1 launch when Pillars 1+2 ship and production-readiness clears. AdMob ruled out permanently. AdSlot removal + BETA indicator queued as next EAS update; task #48 (AdMob) closed as won't-do. Full prior-chat transcript and synthesized session notes archived to `chat-archive/` so the project is fully self-contained.
+- **2026-06-05** — Monetization decision locked: "Free during beta" (Option D). No ads, no paywall, no monetization during beta era; subscription activates at V1 launch when Pillars 1+2 ship and production-readiness clears. AdMob ruled out permanently; task #48 (AdMob) closed as won't-do. AdSlot component + render placements + orphan styles removed from `App.js`; home-screen header changed from "On the Way" → "On the Way (Beta)"; shipped via `eas update --branch preview` (update group `69e75a69-b772-4210-add5-15f9450edf36`) and verified live on phone; source committed and pushed to `cg1980-cyber/on-the-way-mobile`. Full prior-chat transcript and synthesized session notes archived to `chat-archive/` so the project is fully self-contained. Task #53 (Pillar 1 household accounts) scope tiers discussed; MVP-aligned tier recommended pending Cliff's sleep-on-it decision. AfterShip free-tier details captured under task #49 as the MSSC fallback.
