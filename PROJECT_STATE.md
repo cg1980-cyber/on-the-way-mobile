@@ -300,7 +300,7 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 ## Production readiness checklist (before Play Store submit)
 
 - [ ] **Privacy policy** hosted at a public URL. Must disclose: Supabase auth, email content processing, any analytics. Excludes ads if monetization decision lands as recommended.
-- [ ] **Account deletion flow** in-app (Google requires this, not just "contact us"). User taps a button → backend deletes their packages + auth row.
+- [ ] **Account deletion flow** in-app (Google requires this, not just "contact us"). User taps a button → backend deletes their packages + auth row. **Now also needs household handling:** if the user is a household owner with other members, transfer ownership or dissolve the household; if a member, remove their membership and null their `recipient_member_id`s. Don't orphan a household or leave dangling FKs.
 - [ ] **Data deletion request URL** (Google Play Data Safety form requires it).
 - [ ] **Data Safety form** filled out in Play Console (what data, why, encrypted in transit, etc.).
 - [ ] **Terms of Service** hosted at a public URL.
@@ -318,6 +318,13 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - [x] **Backend email parser data quality** (carrier detection tightened, junk rows cleaned in Supabase).
 
 ## Active work
+
+**⏸️ Paused 2026-06-14 — resume checklist (what's pending).** Nothing is blocking or broken; everything shipped this session is live and verified. Pending, in rough priority:
+1. **Bring Cory in** — send a real invite to his actual email, have him join, and exercise the multi-member UI (filter chips, "Who it's for" recipient assignment, 🎁 gift mode — all only render with >1 member, so currently untested with real data).
+2. **Task #53 parser name-matching** (optional finish of Pillar 1) — see open item 2 below.
+3. **Task #49 (EasyPost)** — resume the paused signup, or **Task #52 (Pillar 2)** — Cliff picks order.
+4. **Production-readiness artifacts** — privacy policy, account-deletion flow (now needs household handling), ToS, Data Safety form, icons/splash, Play Console acct, internal testing track, Sentry, rate-limit review, WEBHOOK_SECRET rotation. See checklist above.
+5. **Housekeeping / tech debt** (low priority): mobile repo root has untracked clutter (`App.js.backup`, `PHASE_*.md`, `SECURITY_*.md`, `expo-server.log`, etc.) — do a cleanup + `.gitignore` pass so `git status` is readable; `eas.json` is untracked and should probably be committed (defines build profiles); the SwipeListView/PanResponder duplication (open item 7).
 
 **Next action when work resumes:** **Task #53 (Pillar 1 — Household accounts) is DONE and verified in production** as of 2026-06-14. `BREVO_API_KEY` is set on Railway and a real invite email was confirmed received; `invite.html` is live on GitHub Pages (404→200 verified). Everything pushed (mobile `6681c5d`, backend `5a8105a`+`41987c8`). **Remaining for #53:** (a) bring Cory in with a real invite to exercise multi-member features (filter chips, recipient assignment, gift mode — they only render with >1 member); (b) **parser name-matching** — the one optional refinement left from the original spec: auto-route an incoming package to the right member by matching the shipping-label name. Currently the webhook defaults a package's recipient to whoever owns the tracking address that received the email (a sensible default). **Next major work:** Task #49 (EasyPost live-status refresh — paused mid-signup) or Task #52 (Pillar 2 — address-based carrier auth). Cliff's call which comes first.
 
