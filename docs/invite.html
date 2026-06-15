@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Join a Household - On the Way</title>
+  <style>
+    :root {
+      --primary: #10b981;
+      --background: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --error: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--background);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 380px;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; text-align: center; }
+    p.sub { margin: 0 0 20px; color: var(--text-muted); text-align: center; font-size: 14px; }
+    .logo { text-align: center; font-size: 28px; margin-bottom: 4px; }
+    .code {
+      display: block;
+      text-align: center;
+      font-family: monospace;
+      font-size: 34px;
+      letter-spacing: 8px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    ol { font-size: 14px; line-height: 1.7; color: var(--text); padding-left: 20px; }
+    .msg { margin-top: 12px; font-size: 14px; text-align: center; min-height: 18px; }
+    .msg.err { color: var(--error); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">📦</div>
+    <h1 id="title">You're invited</h1>
+    <p class="sub" id="subtitle">Loading your invitation…</p>
+
+    <div id="content" style="display:none;">
+      <p class="sub" style="margin-bottom:6px;">Your invite code</p>
+      <span class="code" id="code">······</span>
+      <p style="font-size:14px;color:var(--text);">To join:</p>
+      <ol>
+        <li>Install <strong>On the Way</strong> and sign up with the email this invite was sent to.</li>
+        <li>Open <strong>Settings → Household → Have an invite code?</strong></li>
+        <li>Enter the code above and tap <strong>Join Household</strong>.</li>
+      </ol>
+    </div>
+
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <script>
+    const BACKEND = 'https://on-the-way-backend-production.up.railway.app';
+    const token = new URLSearchParams(window.location.search).get('token');
+    const subtitle = document.getElementById('subtitle');
+    const content = document.getElementById('content');
+    const msg = document.getElementById('msg');
+
+    async function load() {
+      if (!token) {
+        subtitle.textContent = '';
+        msg.className = 'msg err';
+        msg.textContent = 'This invite link is missing its code. Ask the sender to resend it.';
+        return;
+      }
+      try {
+        const res = await fetch(`${BACKEND}/api/household/invite/${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'This invite is no longer valid.');
+        }
+        const data = await res.json();
+        document.getElementById('title').textContent = `Join ${data.household_name}`;
+        subtitle.textContent = `Invited as ${data.email}`;
+        document.getElementById('code').textContent = data.invite_code || '——————';
+        content.style.display = 'block';
+      } catch (err) {
+        subtitle.textContent = '';
+        msg.className = 'msg err';
+        msg.textContent = err.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

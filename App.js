@@ -308,6 +308,19 @@ export default function App() {
   const [helpModalVisible, setHelpModalVisible] = useState(false);
   const [resetSending, setResetSending] = useState(false);
 
+  // Household (Pillar 1)
+  const [household, setHousehold] = useState(null);
+  const [householdMembers, setHouseholdMembers] = useState([]);
+  const [myMemberId, setMyMemberId] = useState(null);
+  const [myRole, setMyRole] = useState(null);
+  const [householdLoading, setHouseholdLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [memberFilter, setMemberFilter] = useState(null); // null = whole household
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+
   useEffect(() => { checkSession(); }, []);
 
   useEffect(() => {
@@ -315,6 +328,10 @@ export default function App() {
       autoArchiveExpiredPackages();
     }
   }, [activeTab, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) fetchHousehold();
+  }, [user?.id]);
 
   async function checkSession() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -473,6 +490,117 @@ export default function App() {
     setRefreshing(false);
   }
 
+  // ─── Household (Pillar 1) ──────────────────────────────────────────────────
+  async function fetchHousehold() {
+    try {
+      setHouseholdLoading(true);
+      const data = await makeAuthenticatedRequest('/api/household', 'GET');
+      setHousehold(data.household);
+      setHouseholdMembers(Array.isArray(data.members) ? data.members : []);
+      setMyMemberId(data.me || null);
+      setMyRole(data.myRole || null);
+    } catch (err) {
+      // 404 = user has no household yet (older account); not an error worth alerting.
+      if (!String(err.message).includes('No household')) {
+        console.error('Fetch household error:', err);
+      }
+      setHousehold(null);
+      setHouseholdMembers([]);
+    } finally {
+      setHouseholdLoading(false);
+    }
+  }
+
+  async function renameHousehold(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    try {
+      const updated = await makeAuthenticatedRequest('/api/household', 'PATCH', { name: trimmed });
+      setHousehold(updated);
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  async function inviteMember() {
+    const email = inviteEmail.trim().toLowerCase();
+    const name = inviteName.trim();
+    if (!email || !email.includes('@')) {
+      Alert.alert('Invalid email', 'Enter a valid email address.');
+      return;
+    }
+    if (!name) {
+      Alert.alert('Name required', 'Enter a display name for this person.');
+      return;
+    }
+    try {
+      setInviting(true);
+      const res = await makeAuthenticatedRequest('/api/household/invite', 'POST', {
+        email,
+        display_name: name,
+      });
+      setInviteEmail('');
+      setInviteName('');
+      await fetchHousehold();
+      Alert.alert(
+        'Invite sent',
+        res.email_sent
+          ? `An invitation was emailed to ${email}.`
+          : `${name} was added as pending. Email isn't configured yet, so share this link:\n\n${res.accept_url}`
+      );
+    } catch (err) {
+      Alert.alert('Could not invite', err.message);
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function acceptInvite() {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length < 4) {
+      Alert.alert('Enter your code', 'Type the invite code from your email.');
+      return;
+    }
+    try {
+      setJoining(true);
+      await makeAuthenticatedRequest('/api/household/accept', 'POST', { code });
+      setJoinCode('');
+      await fetchHousehold();
+      await fetchPackages(user?.id);
+      Alert.alert('Joined!', 'You\'re now part of the household. Your shared package feed is ready.');
+    } catch (err) {
+      Alert.alert('Could not join', err.message);
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  async function removeMember(member) {
+    const isSelf = member.id === myMemberId;
+    Alert.alert(
+      isSelf ? 'Leave household?' : `Remove ${member.display_name}?`,
+      isSelf
+        ? 'You will stop seeing this household\'s shared packages.'
+        : `${member.display_name} will be removed from the household.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isSelf ? 'Leave' : 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await makeAuthenticatedRequest(`/api/household/members/${member.id}`, 'DELETE');
+              await fetchHousehold();
+              if (isSelf) setScreen('settings');
+            } catch (err) {
+              Alert.alert('Error', err.message);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   async function updateNickname(pkg, nickname) {
     try {
       // SECURITY: Validate nickname before sending
@@ -533,6 +661,37 @@ export default function App() {
       fetchPackages(user.id);
     } catch (err) {
       console.error('Update note error:', err);
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  // Assign who a package is for (household recipient)
+  async function updateRecipient(pkg, memberId) {
+    try {
+      const next = pkg.recipient_member_id === memberId ? null : memberId;
+      await makeAuthenticatedRequest(`/api/packages/${pkg.id}`, 'PATCH', {
+        recipient_member_id: next,
+      });
+      setSelectedPackage((prev) => (prev ? { ...prev, recipient_member_id: next } : prev));
+      fetchPackages(user.id);
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  }
+
+  // Gift mode — toggle whether a package is hidden from a given member
+  async function toggleHiddenFrom(pkg, memberId) {
+    try {
+      const current = Array.isArray(pkg.hidden_from) ? pkg.hidden_from : [];
+      const next = current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId];
+      await makeAuthenticatedRequest(`/api/packages/${pkg.id}`, 'PATCH', {
+        hidden_from: next,
+      });
+      setSelectedPackage((prev) => (prev ? { ...prev, hidden_from: next } : prev));
+      fetchPackages(user.id);
+    } catch (err) {
       Alert.alert('Error', err.message);
     }
   }
@@ -975,6 +1134,44 @@ export default function App() {
                   onEndEditing={(e) => updateNote(pkg, e.nativeEvent.text)}
                 />
               </View>
+              {householdMembers.filter((m) => m.user_id).length > 1 && (
+                <>
+                  <View style={styles.card}>
+                    <Text style={styles.detailLabel}>Who it's for</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+                      {householdMembers.filter((m) => m.user_id).map((m) => (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={[styles.chip, { marginBottom: 8 }, pkg.recipient_member_id === m.id && styles.chipActive]}
+                          onPress={() => updateRecipient(pkg, m.id)}
+                        >
+                          <Text style={[styles.chipText, pkg.recipient_member_id === m.id && styles.chipTextActive]}>
+                            {m.display_name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.card}>
+                    <Text style={styles.detailLabel}>🎁 Gift mode</Text>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: 11, marginTop: 2 }]}>
+                      Hide this package from someone so a surprise stays secret.
+                    </Text>
+                    {householdMembers.filter((m) => m.user_id && m.id !== myMemberId).map((m) => {
+                      const hidden = Array.isArray(pkg.hidden_from) && pkg.hidden_from.includes(m.id);
+                      return (
+                        <View
+                          key={m.id}
+                          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}
+                        >
+                          <Text style={styles.detailValue}>Hide from {m.display_name}</Text>
+                          <Checkbox checked={hidden} onPress={() => toggleHiddenFrom(pkg, m.id)} />
+                        </View>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </>
           )}
         </ScrollView>
@@ -1040,6 +1237,20 @@ export default function App() {
               <Text style={[styles.detailLabel, { marginTop: 8, color: colors.textMuted, fontSize: 11 }]}>Use this when registering with carriers</Text>
             </View>
           )}
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => { fetchHousehold(); setScreen('household'); }}
+          >
+            <Text style={styles.detailLabel}>Household</Text>
+            <Text style={styles.detailValue}>
+              {household ? household.name : 'Set up your household'}
+            </Text>
+            <Text style={[styles.detailLabel, { marginTop: 4, color: colors.textMuted, fontSize: 11 }]}>
+              {household
+                ? `${householdMembers.length} member${householdMembers.length === 1 ? '' : 's'} · tap to manage`
+                : 'Share a package feed with the people you live with'}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={() => setScreen('instructions')}>
             <Text style={styles.buttonText}>View Carrier Setup Instructions</Text>
           </TouchableOpacity>
@@ -1051,9 +1262,142 @@ export default function App() {
     );
   }
 
+  if (screen === 'household') {
+    const isOwner = myRole === 'owner';
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setScreen('settings')} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Household</Text>
+          <View style={{ width: 60 }} />
+        </View>
+        <ScrollView style={styles.content}>
+          {householdLoading && !household ? (
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
+          ) : !household ? (
+            <View style={styles.card}>
+              <Text style={styles.detailValue}>No household found</Text>
+              <Text style={[styles.detailLabel, { marginTop: 6, color: colors.textMuted }]}>
+                Pull to refresh on the package list, or sign out and back in to set one up.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.card}>
+                <Text style={styles.detailLabel}>Household name</Text>
+                {isOwner ? (
+                  <TextInput
+                    style={[styles.input, { marginTop: 6 }]}
+                    defaultValue={household.name}
+                    placeholderTextColor={colors.textMuted}
+                    returnKeyType="done"
+                    onEndEditing={(e) => renameHousehold(e.nativeEvent.text)}
+                  />
+                ) : (
+                  <Text style={styles.detailValue}>{household.name}</Text>
+                )}
+              </View>
+
+              <Text style={[styles.detailLabel, { marginTop: 16, marginBottom: 4, marginLeft: 4 }]}>
+                MEMBERS ({householdMembers.length})
+              </Text>
+              {householdMembers.map((m) => {
+                const pending = !m.user_id;
+                const isSelf = m.id === myMemberId;
+                return (
+                  <View key={m.id} style={styles.card}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailValue}>
+                          {m.display_name}{isSelf ? ' (you)' : ''}
+                        </Text>
+                        <Text style={[styles.detailLabel, { marginTop: 2, color: colors.textMuted, fontSize: 11 }]}>
+                          {m.role === 'owner' ? '👑 Owner' : 'Member'}
+                          {pending ? ` · invite pending (${m.invite_email})` : ''}
+                        </Text>
+                      </View>
+                      {(isSelf || (isOwner && !isSelf)) && (
+                        <TouchableOpacity onPress={() => removeMember(m)}>
+                          <Text style={{ color: colors.error, fontWeight: '600', paddingLeft: 12 }}>
+                            {isSelf ? 'Leave' : 'Remove'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+
+              {isOwner && (
+                <View style={[styles.card, { marginTop: 16 }]}>
+                  <Text style={styles.detailLabel}>Invite someone</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Their name (e.g. Cory)"
+                    placeholderTextColor={colors.textMuted}
+                    value={inviteName}
+                    onChangeText={setInviteName}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Their email"
+                    placeholderTextColor={colors.textMuted}
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={[styles.button, { marginTop: 12 }]}
+                    onPress={inviteMember}
+                    disabled={inviting}
+                  >
+                    <Text style={styles.buttonText}>{inviting ? 'Sending…' : 'Send Invite'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={[styles.card, { marginTop: 16 }]}>
+                <Text style={styles.detailLabel}>Have an invite code?</Text>
+                <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: 11, marginTop: 2 }]}>
+                  Enter a code someone emailed you to join their household.
+                </Text>
+                <TextInput
+                  style={[styles.input, { letterSpacing: 4, fontFamily: 'monospace' }]}
+                  placeholder="ABC123"
+                  placeholderTextColor={colors.textMuted}
+                  value={joinCode}
+                  onChangeText={setJoinCode}
+                  autoCapitalize="characters"
+                  maxLength={8}
+                />
+                <TouchableOpacity
+                  style={[styles.button, { marginTop: 12 }]}
+                  onPress={acceptInvite}
+                  disabled={joining}
+                >
+                  <Text style={styles.buttonText}>{joining ? 'Joining…' : 'Join Household'}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   const activePackages = deduplicatePackages(packages, 'active');
   const archivedPackages = deduplicatePackages(packages, 'archive');
   const deletedPackages = deduplicatePackages(packages, 'deleted');
+
+  // Per-member filter chips (only meaningful with >1 household member)
+  const showMemberChips = householdMembers.length > 1;
+  const visibleActivePackages = memberFilter
+    ? activePackages.filter((p) => p.recipient_member_id === memberFilter)
+    : activePackages;
 
   return (
     <>
@@ -1089,6 +1433,33 @@ export default function App() {
             <Text style={[styles.tabText, activeTab === 'deleted' && styles.tabTextActive]}>Deleted ({deletedPackages.length})</Text>
           </TouchableOpacity>
         </View>
+
+        {activeTab === 'home' && showMemberChips && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipBar}
+            contentContainerStyle={{ paddingHorizontal: 12, alignItems: 'center' }}
+          >
+            <TouchableOpacity
+              style={[styles.chip, !memberFilter && styles.chipActive]}
+              onPress={() => setMemberFilter(null)}
+            >
+              <Text style={[styles.chipText, !memberFilter && styles.chipTextActive]}>Everyone</Text>
+            </TouchableOpacity>
+            {householdMembers.filter((m) => m.user_id).map((m) => (
+              <TouchableOpacity
+                key={m.id}
+                style={[styles.chip, memberFilter === m.id && styles.chipActive]}
+                onPress={() => setMemberFilter(memberFilter === m.id ? null : m.id)}
+              >
+                <Text style={[styles.chipText, memberFilter === m.id && styles.chipTextActive]}>
+                  {m.display_name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {activeTab === 'home' && (
           activePackages.length === 0 ? (
@@ -1142,7 +1513,7 @@ export default function App() {
             </ScrollView>
           ) : (
             <SwipeListView
-              data={activePackages}
+              data={visibleActivePackages}
               keyExtractor={item => item.id}
               renderItem={({ item }) => {
                 return (
@@ -1326,6 +1697,11 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomColor: colors.primary },
   tabText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
   tabTextActive: { color: colors.primary, fontWeight: '600' },
+  chipBar: { flexGrow: 0, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  chip: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
   emptyStateScroll: { flex: 1 },
   emptyContent: { paddingTop: 40, paddingHorizontal: 20, paddingBottom: 40 },
   emptyIcon: { fontSize: 64, textAlign: 'center', marginBottom: 16 },
