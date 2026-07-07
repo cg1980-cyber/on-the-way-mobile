@@ -305,11 +305,11 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 
 ## Production readiness checklist (before Play Store submit)
 
-- [ ] **Privacy policy** hosted at a public URL. Must disclose: Supabase auth, email content processing, any analytics. Excludes ads if monetization decision lands as recommended.
+- [x] **Privacy policy** hosted + live 2026-07-06 at `https://cg1980-cyber.github.io/on-the-way-mobile/privacy.html` (discloses Supabase auth, email-content processing, all processors incl. EasyPost/FCM, no analytics/ads/data selling, household visibility, retention). **Pending Cliff's read-through before Play Store submission.**
 - [x] **Account deletion flow** in-app (shipped 2026-07-06): Settings → "Delete my account and data" → double confirm → `DELETE /api/auth/account`. Backend handles household ownership handoff (promotes longest-tenured joined member), dissolves empty households, deletes packages + push tokens + profile + auth user.
-- [ ] **Data deletion request URL** (Google Play Data Safety form requires it).
+- [x] **Data deletion request URL** — `https://cg1980-cyber.github.io/on-the-way-mobile/privacy.html#delete` (in-app steps + 30-day email fallback). Live 2026-07-06.
 - [ ] **Data Safety form** filled out in Play Console (what data, why, encrypted in transit, etc.).
-- [ ] **Terms of Service** hosted at a public URL.
+- [x] **Terms of Service** hosted + live 2026-07-06 at `https://cg1980-cyber.github.io/on-the-way-mobile/terms.html` (beta status, household rules, acceptable use, liability). **Pending Cliff's read-through.**
 - [x] **App icons + splash screen** (shipped 2026-07-06): brand icon/adaptive-icon/splash/notification-icon generated from the HousePathLogo mark, wired in `app.json`, baked into the v1.1.0 build.
 - [ ] **Play Console developer account** ($25 one-time).
 - [ ] **Internal testing track** first (closed group of 10-20 testers) before production rollout.
@@ -336,7 +336,8 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 1. ~~Install the new APK~~ **DONE 2026-07-06** — v1.1.0 installed and visually verified on Cliff's phone (new icon, dark splash, grouped card layout all confirmed good). Future OTA updates target runtime 1.1.0.
 2. ~~Run `PUSH_TOKENS_SETUP.sql`~~ **DONE 2026-07-06** — `push_tokens` table created in Supabase, RLS verified (`push_tokens | true`). Devices now register tokens on app open.
 3. ~~Firebase FCM credentials~~ **DONE + VERIFIED 2026-07-06.** Firebase project `on-the-way-d7427` created (Spark plan, Analytics off); `google-services.json` in repo root (gitignored — public repo — and uploaded to EAS as secret file env var `GOOGLE_SERVICES_JSON`, injected via new `app.config.js`); FCM V1 service-account key uploaded to Expo credentials; rebuild `a33d48aa` with FCM baked in installed on Cliff's phone. **Test notification delivered end-to-end** (Settings → 🔔 Send Test Notification → `POST /api/push/test`, backend commit `14bb3b5`, OTA group `6f29b27a`). Household-wide package alerts are now fully live.
-4. **EasyPost production key** (resume the paused signup at easypost.com) → add `EASYPOST_API_KEY` on Railway. Pull-to-refresh live statuses light up instantly — no code changes needed.
+4. **EasyPost production key** (resume the paused signup at easypost.com) → add `EASYPOST_API_KEY` on Railway. Pull-to-refresh live statuses light up instantly — no code changes needed. **Cliff plans to do this (+ invite Cory) 2026-07-07.**
+6. **Privacy Policy + ToS drafted, hosted, live 2026-07-06** (`docs/privacy.html`, `docs/terms.html` on GitHub Pages). Cliff to read both before Play Store submission; edits welcome.
 5. **(Deferred by design) Sentry** — needs a Sentry account; the native module will piggyback the next rebuild after the account exists. Skipped this round to keep build risk low.
 
 **Also still open:** bring Cory in (multi-member UI still untested with real data — auto-join now makes this one tap for him); privacy policy / ToS / Data Safety form / Play Console account / internal testing track; repo-root clutter cleanup + `.gitignore` pass (`eas.json` still untracked).
