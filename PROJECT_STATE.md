@@ -334,7 +334,7 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 
 **Cliff's steps to finish the wave (in order):**
 1. ~~Install the new APK~~ **DONE 2026-07-06** — v1.1.0 installed and visually verified on Cliff's phone (new icon, dark splash, grouped card layout all confirmed good). Future OTA updates target runtime 1.1.0.
-2. **Run `PUSH_TOKENS_SETUP.sql`** in Supabase SQL Editor (creates the push-token table).
+2. ~~Run `PUSH_TOKENS_SETUP.sql`~~ **DONE 2026-07-06** — `push_tokens` table created in Supabase, RLS verified (`push_tokens | true`). Devices now register tokens on app open.
 3. **Firebase FCM credentials** (required for Android push delivery; needs Cliff's Google account): console.firebase.google.com → create project → add Android app with package `net.onthewayapp.app` → download `google-services.json` into the repo root; then Project settings → Service accounts → generate private key JSON → upload to EAS (`eas credentials`, Android → Push notifications). Then one more rebuild (automated) bakes it in. Push code is inert-but-safe until this lands.
 4. **EasyPost production key** (resume the paused signup at easypost.com) → add `EASYPOST_API_KEY` on Railway. Pull-to-refresh live statuses light up instantly — no code changes needed.
 5. **(Deferred by design) Sentry** — needs a Sentry account; the native module will piggyback the next rebuild after the account exists. Skipped this round to keep build risk low.
