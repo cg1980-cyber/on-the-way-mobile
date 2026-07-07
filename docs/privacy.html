@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - On the Way</title>
+  <style>
+    :root {
+      --primary: #10b981;
+      --background: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 24px 16px 64px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 8px 0 4px; }
+    h2 { font-size: 19px; margin: 32px 0 8px; color: var(--primary); }
+    p, li { font-size: 15px; color: var(--text); }
+    .muted { color: var(--text-muted); font-size: 14px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    a { color: var(--primary); }
+    ul { padding-left: 22px; }
+    .logo { font-size: 26px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">📦</div>
+    <h1>Privacy Policy</h1>
+    <p class="muted">On the Way — package tracking for households<br/>Effective date: July 6, 2026</p>
+
+    <div class="card">
+      <p><strong>The short version:</strong> We don't read your email inbox. We don't show ads. We don't sell your data — to anyone, ever. We store only what the app needs to track your household's packages, and you can delete all of it yourself, in the app, at any time.</p>
+    </div>
+
+    <h2>Who we are</h2>
+    <p>On the Way is a package-tracking app for households, operated independently. Contact: <a href="mailto:support@onthewayapp.net">support@onthewayapp.net</a>.</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><strong>Account information.</strong> Your email address and a password (stored as a secure hash by our authentication provider). Optionally, your home address if you choose to provide it.</li>
+      <li><strong>Forwarded shipping emails.</strong> The app gives you a unique forwarding address (e.g. <span class="muted">yourname.abc123@onthewayapp.net</span>). Shipping notifications sent to that address are parsed to extract package details — carrier, tracking number, merchant, status, and delivery estimate. <strong>We never connect to or scan your email inbox.</strong> Only mail you actively route to your forwarding address reaches us, and non-shipping emails are discarded rather than stored.</li>
+      <li><strong>Package details you add.</strong> Nicknames, notes, recipient assignments, and gift-mode settings you enter in the app.</li>
+      <li><strong>Household information.</strong> Household name, member display names, and invitation email addresses.</li>
+      <li><strong>Push notification token.</strong> A device token so we can send package alerts, if you allow notifications.</li>
+    </ul>
+    <p>We collect <strong>no</strong> analytics, advertising identifiers, location data, contacts, or browsing history. There are no third-party analytics or advertising SDKs in the app.</p>
+
+    <h2>How we use it</h2>
+    <ul>
+      <li>To show your household's packages in one shared feed.</li>
+      <li>To send package alerts (new package, out for delivery, delivered) to household members' devices.</li>
+      <li>To look up live tracking status with carriers via our tracking-data processor (tracking numbers only).</li>
+      <li>To send household invitation emails you request.</li>
+      <li>To respond when you contact support.</li>
+    </ul>
+    <p>That's the complete list. We do not sell, rent, or share your personal information for advertising or marketing, and we do not use it to build profiles.</p>
+
+    <h2>Household sharing — what members can see</h2>
+    <p>On the Way is household-first by design: members of your household see the household's shared package feed, including packages addressed to other members. Two exceptions:</p>
+    <ul>
+      <li><strong>Gift mode</strong> lets you hide a specific package from a specific member (so surprises stay surprises).</li>
+      <li>Packages you had before joining a household move with you and leave with you.</li>
+    </ul>
+    <p>Only join a household with people you trust to see your deliveries.</p>
+
+    <h2>Service providers (processors)</h2>
+    <p>We use a small set of infrastructure providers to run the service. Each receives only what it needs to do its job:</p>
+    <ul>
+      <li><strong>Supabase</strong> — database and authentication (account, packages, household data).</li>
+      <li><strong>Railway</strong> — hosts our backend server.</li>
+      <li><strong>Cloudflare</strong> — routes email sent to your forwarding address.</li>
+      <li><strong>Brevo</strong> — delivers invitation and support emails.</li>
+      <li><strong>Expo &amp; Google Firebase Cloud Messaging</strong> — deliver push notifications to your device.</li>
+      <li><strong>EasyPost</strong> — live tracking-status lookups (receives tracking numbers only, no personal details).</li>
+    </ul>
+    <p>Data is encrypted in transit (HTTPS/TLS) and stored on servers located in the United States. Database access is restricted with row-level security so each household can only reach its own data.</p>
+
+    <h2 id="delete">Deleting your data</h2>
+    <div class="card">
+      <p><strong>In the app:</strong> Settings → <em>Delete my account and data</em>. This permanently deletes your account, your packages, your push tokens, and your household membership (ownership of a shared household passes to its longest-standing member; a household with no remaining members is deleted).</p>
+      <p><strong>By email:</strong> if you can't access the app, send a deletion request to <a href="mailto:support@onthewayapp.net">support@onthewayapp.net</a> from your account email and we'll complete it within 30 days.</p>
+    </div>
+
+    <h2>Data retention</h2>
+    <p>Your data is kept while your account is active and deleted when you delete your account. Forwarded emails that aren't shipping notifications are not stored at all.</p>
+
+    <h2>Children</h2>
+    <p>On the Way is not directed at children under 13, and we do not knowingly collect information from them.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes materially, we'll update this page and note it in the app. The effective date above always reflects the current version.</p>
+
+    <h2>Contact</h2>
+    <p>Questions or concerns: <a href="mailto:support@onthewayapp.net">support@onthewayapp.net</a></p>
+  </div>
+</body>
+</html>
