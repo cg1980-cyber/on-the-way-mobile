@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, ScrollView,
-  StatusBar, SafeAreaView, RefreshControl, Modal, PanResponder, Animated, Linking
+  StatusBar, SafeAreaView, RefreshControl, Modal, PanResponder, Animated, Linking, Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { createClient } from '@supabase/supabase-js';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { SwipeListView } from 'react-native-swipe-list-view';
@@ -25,6 +26,18 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !RAILWAY_URL) {
   console.error('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
   console.error('RAILWAY_URL:', RAILWAY_URL ? 'SET' : 'MISSING');
 }
+
+const EAS_PROJECT_ID = '7bc227c6-5c80-4a00-82ab-30b165c89344';
+
+// Show notifications while the app is foregrounded too.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '', {
   auth: {
@@ -463,6 +476,42 @@ export default function App() {
   useEffect(() => {
     if (user?.id) fetchHousehold();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) registerForPushNotifications();
+  }, [user?.id]);
+
+  // Register this device for push. Fully guarded: any failure (permissions
+  // denied, FCM not configured yet, no network) is silent and never blocks
+  // the app. The backend sends household-wide pushes on status changes.
+  async function registerForPushNotifications() {
+    try {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Package updates',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#10b981',
+        }).catch(() => {});
+      }
+      const existing = await Notifications.getPermissionsAsync();
+      let status = existing.status;
+      if (status !== 'granted') {
+        const req = await Notifications.requestPermissionsAsync();
+        status = req.status;
+      }
+      if (status !== 'granted') return;
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: EAS_PROJECT_ID });
+      if (tokenData && tokenData.data) {
+        await makeAuthenticatedRequest('/api/push/register', 'POST', {
+          token: tokenData.data,
+          platform: Platform.OS,
+        });
+      }
+    } catch (e) {
+      console.warn('Push registration skipped:', e.message);
+    }
+  }
 
   async function checkSession() {
     const { data: { session } } = await supabase.auth.getSession();
