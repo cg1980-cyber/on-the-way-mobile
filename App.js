@@ -1518,6 +1518,24 @@ export default function App() {
           <TouchableOpacity style={styles.button} onPress={() => setScreen('instructions')}>
             <Text style={styles.buttonText}>View Carrier Setup Instructions</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, { marginTop: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+            onPress={async () => {
+              try {
+                const r = await makeAuthenticatedRequest('/api/push/test', 'POST');
+                Alert.alert(
+                  r.sent ? 'Sent!' : 'Not sent',
+                  r.sent
+                    ? 'A test notification is on its way to every device in your household.'
+                    : (r.reason || 'Could not send.')
+                );
+              } catch (e) {
+                Alert.alert('Error', e.message);
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>🔔 Send Test Notification</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.buttonDanger, { marginTop: 12 }]} onPress={handleSignOut}>
             <Text style={styles.buttonText}>Sign Out</Text>
           </TouchableOpacity>
