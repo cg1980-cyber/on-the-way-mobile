@@ -189,7 +189,120 @@ async function openTrackingLink(pkg) {
   }
 }
 
-function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArchived = false, isDeleted = false }) {
+// ─── Delivery date helpers ────────────────────────────────────────────────────
+// Carrier emails produce estimated_delivery strings in many formats
+// ("Thursday, June 12", "06/12/2026", "2026-06-12", "Jun 12"). Parse what we
+// can so the UI can say "Today" / "Tomorrow" / "Thu, Jun 18"; fall back to the
+// raw string when we can't.
+const MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function parseDeliveryDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+
+  const iso = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]);
+
+  const named = s.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/i);
+  if (named) {
+    const monthIdx = MONTH_ABBR.indexOf(named[1].toLowerCase().slice(0, 3));
+    const day = parseInt(named[2], 10);
+    const now = new Date();
+    let year = named[3] ? parseInt(named[3], 10) : now.getFullYear();
+    let d = new Date(year, monthIdx, day);
+    // No year given and the date looks long past → it means next year.
+    if (!named[3] && d < new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60)) {
+      d = new Date(year + 1, monthIdx, day);
+    }
+    return d;
+  }
+
+  const slash = s.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if (slash) {
+    const now = new Date();
+    let year = slash[3] ? parseInt(slash[3], 10) : now.getFullYear();
+    if (year < 100) year += 2000;
+    return new Date(year, parseInt(slash[1], 10) - 1, parseInt(slash[2], 10));
+  }
+
+  return null;
+}
+
+function humanizeDelivery(raw) {
+  const d = parseDeliveryDate(raw);
+  if (!d || isNaN(d.getTime())) return raw || '';
+  const diff = Math.round((startOfDay(d) - startOfDay(new Date())) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  if (diff > 1 && diff < 7) return DAY_NAMES[d.getDay()];
+  return `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+}
+
+// Bucket packages by arrival day for the grouped home list.
+const BUCKET_ORDER = ['today', 'tomorrow', 'week', 'later', 'nodate', 'delivered'];
+const BUCKET_TITLES = {
+  today: 'Arriving today',
+  tomorrow: 'Tomorrow',
+  week: 'This week',
+  later: 'Later',
+  nodate: 'No date yet',
+  delivered: 'Delivered',
+};
+
+function deliveryBucket(item) {
+  if ((item.status || '') === 'Delivered') return 'delivered';
+  const d = parseDeliveryDate(item.estimated_delivery);
+  if (!d || isNaN(d.getTime())) return 'nodate';
+  const diff = Math.round((startOfDay(d) - startOfDay(new Date())) / 86400000);
+  if (diff <= 0) return 'today'; // due (or overdue) → surface at the top
+  if (diff === 1) return 'tomorrow';
+  if (diff < 7) return 'week';
+  return 'later';
+}
+
+function groupPackagesForDisplay(pkgs) {
+  const buckets = {};
+  pkgs.forEach((p) => {
+    const b = deliveryBucket(p);
+    (buckets[b] = buckets[b] || []).push(p);
+  });
+  const rows = [];
+  BUCKET_ORDER.forEach((b) => {
+    if (buckets[b] && buckets[b].length) {
+      rows.push({ _type: 'header', id: `hdr-${b}`, title: BUCKET_TITLES[b] });
+      buckets[b].sort((a, z) => {
+        const da = parseDeliveryDate(a.estimated_delivery);
+        const dz = parseDeliveryDate(z.estimated_delivery);
+        return (da ? da.getTime() : Infinity) - (dz ? dz.getTime() : Infinity);
+      });
+      rows.push(...buckets[b]);
+    }
+  });
+  return rows;
+}
+
+// ─── Household member chips ───────────────────────────────────────────────────
+const MEMBER_CHIP_COLORS = ['#0e7490', '#7c3aed', '#be185d', '#b45309', '#1d4ed8', '#065f46'];
+
+function memberColor(id) {
+  let h = 0;
+  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return MEMBER_CHIP_COLORS[h % MEMBER_CHIP_COLORS.length];
+}
+
+function memberInitials(name) {
+  const s = String(name || '?').trim();
+  return (s.charAt(0).toUpperCase() + s.charAt(1).toLowerCase()).trim();
+}
+
+function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArchived = false, isDeleted = false, recipientMember = null, showRecipient = false }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const panResponder = useRef(
     PanResponder.create({
@@ -245,10 +358,11 @@ function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArch
         {...panResponder.panHandlers}
       >
         <TouchableOpacity
-          style={styles.packageCard}
+          style={[styles.packageCard, { overflow: 'hidden' }]}
           onPress={onPress}
           activeOpacity={0.7}
         >
+          <View style={[styles.statusEdge, { backgroundColor: statusColors[item.status] || colors.border }]} />
           <View style={styles.packageLeft}>
             {/* Only show fields the user has actually filled in. Hide anything blank. */}
             {item.nickname ? (
@@ -263,8 +377,12 @@ function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArch
               </Text>
             ) : null}
             <View style={styles.packageMeta}>
+              {item.status ? (
+                <View style={[styles.statusPill, { backgroundColor: (statusColors[item.status] || colors.textMuted) + '26' }]}>
+                  <Text style={[styles.statusPillText, { color: statusColors[item.status] || colors.textMuted }]}>{item.status}</Text>
+                </View>
+              ) : null}
               <Text style={styles.packageCarrier}>{item.carrier}</Text>
-              <View style={[styles.statusDot, { backgroundColor: statusColors[item.status] || colors.textMuted }]} />
             </View>
             {item.tracking_number ? (
               <TouchableOpacity
@@ -278,12 +396,24 @@ function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArch
               <Text style={styles.notePreview} numberOfLines={2}>📝 {item.note}</Text>
             ) : null}
           </View>
-          {item.estimated_delivery && (
-            <View style={styles.deliveryBadge}>
-              <Text style={styles.deliveryBadgeLabel}>ETA</Text>
-              <Text style={styles.deliveryBadgeDate}>{item.estimated_delivery}</Text>
+          <View style={styles.packageRight}>
+            <View style={styles.packageRightBadges}>
+              {Array.isArray(item.hidden_from) && item.hidden_from.length > 0 ? (
+                <Text style={styles.giftIndicator}>🎁</Text>
+              ) : null}
+              {showRecipient && recipientMember ? (
+                <View style={[styles.memberChipSmall, { backgroundColor: memberColor(recipientMember.id) }]}>
+                  <Text style={styles.memberChipSmallText}>{memberInitials(recipientMember.display_name)}</Text>
+                </View>
+              ) : null}
             </View>
-          )}
+            {item.estimated_delivery ? (
+              <View style={styles.deliveryBadge}>
+                <Text style={styles.deliveryBadgeLabel}>ETA</Text>
+                <Text style={styles.deliveryBadgeDate}>{humanizeDelivery(item.estimated_delivery)}</Text>
+              </View>
+            ) : null}
+          </View>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -320,6 +450,7 @@ export default function App() {
   const [memberFilter, setMemberFilter] = useState(null); // null = whole household
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState(null);
 
   useEffect(() => { checkSession(); }, []);
 
@@ -337,6 +468,24 @@ export default function App() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       setUser(session.user);
+      // Paint instantly from the local cache while fresh data loads.
+      // First honest step toward "local storage where possible" (Pillar 3).
+      try {
+        const [cp, ch] = await Promise.all([
+          AsyncStorage.getItem('cache:packages'),
+          AsyncStorage.getItem('cache:household'),
+        ]);
+        if (cp) setPackages(JSON.parse(cp));
+        if (ch) {
+          const h = JSON.parse(ch);
+          if (h && h.household) {
+            setHousehold(h.household);
+            setHouseholdMembers(h.members || []);
+            setMyMemberId(h.me || null);
+            setMyRole(h.myRole || null);
+          }
+        }
+      } catch (e) { /* cache is best-effort */ }
       const trackingEmail = await fetchUserProfile(session.user.id);
       if (trackingEmail) setUser(prev => ({ ...prev, trackingEmail }));
       const completed = await AsyncStorage.getItem('completedCarriers');
@@ -465,10 +614,49 @@ export default function App() {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
+    await AsyncStorage.multiRemove(['cache:packages', 'cache:household']).catch(() => {});
     setUser(null);
     setPackages([]);
     setCompletedCarriers([]);
+    setHousehold(null);
+    setHouseholdMembers([]);
+    setMyMemberId(null);
+    setMyRole(null);
+    setMemberFilter(null);
+    setPendingInvite(null);
     setScreen('auth');
+  }
+
+  async function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account, your packages, and your household membership. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Are you sure?', 'Last chance — everything will be permanently removed.', [
+              { text: 'Keep my account', style: 'cancel' },
+              {
+                text: 'Delete everything',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await makeAuthenticatedRequest('/api/auth/account', 'DELETE');
+                  } catch (err) {
+                    Alert.alert('Error', err.message);
+                    return;
+                  }
+                  await handleSignOut();
+                },
+              },
+            ]);
+          },
+        },
+      ]
+    );
   }
 
   async function fetchPackages(userId) {
@@ -476,6 +664,7 @@ export default function App() {
       // SECURITY: Use JWT authentication instead of X-User-ID header
       const data = await makeAuthenticatedRequest('/api/packages', 'GET');
       setPackages(Array.isArray(data) ? data : []);
+      AsyncStorage.setItem('cache:packages', JSON.stringify(data)).catch(() => {});
     } catch (err) {
       console.error('Fetch packages error:', err);
       if (err.message.includes('not authenticated')) {
@@ -486,6 +675,9 @@ export default function App() {
 
   async function onRefresh() {
     setRefreshing(true);
+    // Ask the backend to refresh live carrier statuses first (EasyPost).
+    // Harmless no-op until the API key is configured server-side.
+    try { await makeAuthenticatedRequest('/api/refresh-status', 'POST'); } catch (e) { /* optional */ }
     await fetchPackages(user?.id);
     setRefreshing(false);
   }
@@ -499,6 +691,7 @@ export default function App() {
       setHouseholdMembers(Array.isArray(data.members) ? data.members : []);
       setMyMemberId(data.me || null);
       setMyRole(data.myRole || null);
+      AsyncStorage.setItem('cache:household', JSON.stringify(data)).catch(() => {});
     } catch (err) {
       // 404 = user has no household yet (older account); not an error worth alerting.
       if (!String(err.message).includes('No household')) {
@@ -508,6 +701,28 @@ export default function App() {
       setHouseholdMembers([]);
     } finally {
       setHouseholdLoading(false);
+    }
+    // Separately, check whether an invite is waiting for this email address.
+    try {
+      const inv = await makeAuthenticatedRequest('/api/household/my-invite', 'GET');
+      setPendingInvite(inv && inv.invite ? inv.invite : null);
+    } catch (e) {
+      setPendingInvite(null);
+    }
+  }
+
+  async function acceptInviteToken(token) {
+    try {
+      setJoining(true);
+      await makeAuthenticatedRequest('/api/household/accept', 'POST', { token });
+      setPendingInvite(null);
+      await fetchHousehold();
+      await fetchPackages(user?.id);
+      Alert.alert('Joined!', 'Welcome to the household — your shared package feed is ready.');
+    } catch (err) {
+      Alert.alert('Could not join', err.message);
+    } finally {
+      setJoining(false);
     }
   }
 
@@ -1067,7 +1282,7 @@ export default function App() {
             {pkg.estimated_delivery && (
               <View style={styles.deliveryDateBox}>
                 <Text style={styles.deliveryDateLabel}>EXPECTED DELIVERY</Text>
-                <Text style={styles.deliveryDateValue}>{pkg.estimated_delivery}</Text>
+                <Text style={styles.deliveryDateValue}>{humanizeDelivery(pkg.estimated_delivery)}</Text>
               </View>
             )}
           </View>
@@ -1257,6 +1472,9 @@ export default function App() {
           <TouchableOpacity style={[styles.button, styles.buttonDanger, { marginTop: 12 }]} onPress={handleSignOut}>
             <Text style={styles.buttonText}>Sign Out</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteAccountLink} onPress={confirmDeleteAccount}>
+            <Text style={styles.deleteAccountText}>Delete my account and data</Text>
+          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     );
@@ -1275,6 +1493,23 @@ export default function App() {
           <View style={{ width: 60 }} />
         </View>
         <ScrollView style={styles.content}>
+          {pendingInvite && (
+            <View style={styles.inviteBanner}>
+              <Text style={styles.inviteBannerTitle}>
+                📬 You're invited to {pendingInvite.household_name || 'a household'}
+              </Text>
+              <Text style={styles.inviteBannerBody}>
+                Join to share one package feed with your household.
+              </Text>
+              <TouchableOpacity
+                style={[styles.button, { marginTop: 10 }]}
+                onPress={() => acceptInviteToken(pendingInvite.token)}
+                disabled={joining}
+              >
+                <Text style={styles.buttonText}>{joining ? 'Joining…' : 'Join Household'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {householdLoading && !household ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
           ) : !household ? (
@@ -1393,11 +1628,15 @@ export default function App() {
   const archivedPackages = deduplicatePackages(packages, 'archive');
   const deletedPackages = deduplicatePackages(packages, 'deleted');
 
-  // Per-member filter chips (only meaningful with >1 household member)
+  // Per-member filter chips (only meaningful with >1 joined household member)
+  const joinedMembers = householdMembers.filter((m) => m.user_id);
   const showMemberChips = householdMembers.length > 1;
   const visibleActivePackages = memberFilter
     ? activePackages.filter((p) => p.recipient_member_id === memberFilter)
     : activePackages;
+  const activeRows = groupPackagesForDisplay(visibleActivePackages);
+  const memberById = {};
+  householdMembers.forEach((m) => { memberById[m.id] = m; });
 
   return (
     <>
@@ -1476,6 +1715,19 @@ export default function App() {
                   </View>
                 )}
 
+                {joinedMembers.length <= 1 && (
+                  <TouchableOpacity
+                    style={styles.householdPromo}
+                    onPress={() => { fetchHousehold(); setScreen('household'); }}
+                  >
+                    <Text style={styles.householdPromoTitle}>👋 Live with someone?</Text>
+                    <Text style={styles.householdPromoBody}>
+                      Invite them to your household — everyone sees every package coming to your home, in one shared feed.
+                    </Text>
+                    <Text style={styles.householdPromoLink}>Set up your household →</Text>
+                  </TouchableOpacity>
+                )}
+
                 <View style={styles.carrierSection}>
                   <Text style={styles.carrierTitle}>Pending Registration</Text>
                   {getCarriers(user?.trackingEmail).filter(c => !completedCarriers.includes(c.id)).map(carrier => (
@@ -1513,9 +1765,12 @@ export default function App() {
             </ScrollView>
           ) : (
             <SwipeListView
-              data={visibleActivePackages}
+              data={activeRows}
               keyExtractor={item => item.id}
               renderItem={({ item }) => {
+                if (item._type === 'header') {
+                  return <Text style={styles.sectionHeader}>{item.title}</Text>;
+                }
                 return (
                   <SwipeablePackageCard
                     item={item}
@@ -1523,6 +1778,8 @@ export default function App() {
                     onSwipeRight={() => archivePackage(item)}
                     onSwipeLeft={() => moveToDeleted(item)}
                     isArchived={false}
+                    showRecipient={joinedMembers.length > 1}
+                    recipientMember={item.recipient_member_id ? memberById[item.recipient_member_id] : null}
                   />
                 );
               }}
@@ -1733,6 +1990,24 @@ const styles = StyleSheet.create({
   deliveryBadgeLabel: { fontSize: 10, color: colors.primary, fontWeight: '700', letterSpacing: 1 },
   deliveryBadgeDate: { fontSize: 14, color: colors.primary, fontWeight: '700', marginTop: 2 },
   statusDot: { width: 12, height: 12, borderRadius: 6 },
+  statusEdge: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  statusPill: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 },
+  statusPillText: { fontSize: 11, fontWeight: '600' },
+  packageRight: { alignItems: 'flex-end', justifyContent: 'center', gap: 6, marginLeft: 10 },
+  packageRightBadges: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  giftIndicator: { fontSize: 14 },
+  memberChipSmall: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  memberChipSmallText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  sectionHeader: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginHorizontal: 16, marginTop: 14, marginBottom: 2 },
+  householdPromo: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + '55', borderRadius: 12, padding: 16, marginTop: 16, width: '100%' },
+  householdPromoTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  householdPromoBody: { color: colors.textMuted, fontSize: 13, marginTop: 6, lineHeight: 18 },
+  householdPromoLink: { color: colors.primary, fontSize: 13, fontWeight: '600', marginTop: 10 },
+  inviteBanner: { backgroundColor: colors.primary + '18', borderWidth: 1, borderColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 12 },
+  inviteBannerTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  inviteBannerBody: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  deleteAccountLink: { alignItems: 'center', marginTop: 24, marginBottom: 32 },
+  deleteAccountText: { color: colors.textMuted, fontSize: 13, textDecorationLine: 'underline' },
   rowBack: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', borderRadius: 8, overflow: 'hidden' },
   backActionDelete: { backgroundColor: colors.error, flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
   backActionDeleteForever: { backgroundColor: '#991b1b', flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
