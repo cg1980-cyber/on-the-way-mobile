@@ -333,7 +333,7 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - **Wave 4 — docs + SQL**: `PUSH_TOKENS_SETUP.sql` written (Cliff pastes into Supabase); this doc updated.
 
 **Cliff's steps to finish the wave (in order):**
-1. **Install the new APK** when build `de89c2fd` finishes (EAS dashboard → build → download on phone). Until then the phone runs 1.0.0 and keeps getting Wave 1 via OTA — nothing breaks.
+1. ~~Install the new APK~~ **DONE 2026-07-06** — v1.1.0 installed and visually verified on Cliff's phone (new icon, dark splash, grouped card layout all confirmed good). Future OTA updates target runtime 1.1.0.
 2. **Run `PUSH_TOKENS_SETUP.sql`** in Supabase SQL Editor (creates the push-token table).
 3. **Firebase FCM credentials** (required for Android push delivery; needs Cliff's Google account): console.firebase.google.com → create project → add Android app with package `net.onthewayapp.app` → download `google-services.json` into the repo root; then Project settings → Service accounts → generate private key JSON → upload to EAS (`eas credentials`, Android → Push notifications). Then one more rebuild (automated) bakes it in. Push code is inert-but-safe until this lands.
 4. **EasyPost production key** (resume the paused signup at easypost.com) → add `EASYPOST_API_KEY` on Railway. Pull-to-refresh live statuses light up instantly — no code changes needed.
