@@ -35,6 +35,10 @@ yarn-error.*
 .env*.local
 .env.*.local
 
+# Firebase config — repo is public (GitHub Pages); supplied to EAS builds
+# via the GOOGLE_SERVICES_JSON file env var instead
+google-services.json
+
 # typescript
 *.tsbuildinfo
 
