@@ -1,6 +1,6 @@
 # On the Way — Project Reference
 
-_Last updated: 2026-07-06_
+_Last updated: 2026-07-08_
 
 ## How to use this document
 
@@ -322,6 +322,23 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - [x] **support@onthewayapp.net inbound** (Cloudflare Email Routing → Gmail).
 - [x] **support@onthewayapp.net outbound** (Brevo + Gmail Send-as, DKIM/DMARC verified).
 - [x] **Backend email parser data quality** (carrier detection tightened, junk rows cleaned in Supabase).
+
+## ⏸️ Session checkpoint — 2026-07-08 (night)
+
+**Everything below is live and verified. Working trees clean; both repos pushed.**
+
+Shipped this session (on top of the 2026-07-06/07 four-wave run):
+- **EasyPost live tracking WORKING** (Task #49 fully closed). Key was mis-named `Easypost_API_Key` on Railway → renamed to `EASYPOST_API_KEY`. Confirmed live: packages flipped to "Available for Pickup" and "Delivered" on pull-to-refresh. Billing confirmed: ~$0.02–0.03 once per tracking number at first registration; refreshes are free.
+- **`delivered_at` column** added (via browser-driven SQL — Claude ran it in Supabase after Cliff signed in). Delivered cards show "DELIVERED + real date" (from EasyPost delivery scan / delivery emails) instead of ETA.
+- **Refresh scope tightened**: backend already excluded archived/deleted; mobile now only fires `/api/refresh-status` from the Active tab. Debug diagnostics popup removed.
+- **Settings "About & Legal" card**: Privacy Policy, Terms of Service, Contact Support links + version line.
+- **Household-load resilience fix** (mobile `2c20498`): a transient backend error (e.g. mid-redeploy) no longer wipes the household from the UI — only a genuine "No household" clears it; added a "Try again" button. (Root cause of a scare tonight where the household appeared "gone" — it was always intact in the DB; just a fetch-during-redeploy blip.)
+
+Backend commits this session: `68849fc`, `b0e77af` (+ reverted lockfile `046144b`). Mobile HEAD: `2c20498`. Backend HEAD: `b0e77af`.
+
+**Only remaining user action:** invite Cory (Settings → Household → Invite Someone) to exercise multi-member features with real data. A leftover pending "Test Cliff" invite (to hicliff1980@gmail.com) can be Removed anytime.
+
+**Deploy hygiene reminder (learned tonight):** each Railway redeploy briefly fails in-flight requests; batch backend changes into fewer deploys, and always health-check `/` after a backend push.
 
 ## Active work
 
