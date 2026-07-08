@@ -469,7 +469,6 @@ export default function App() {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [pendingInvite, setPendingInvite] = useState(null);
-  const [debugRefresh, setDebugRefresh] = useState(false); // flip to true to surface EasyPost refresh diagnostics on pull-to-refresh
 
   useEffect(() => { checkSession(); }, []);
 
@@ -730,21 +729,14 @@ export default function App() {
 
   async function onRefresh() {
     setRefreshing(true);
-    // Ask the backend to refresh live carrier statuses first (EasyPost).
-    // Harmless no-op until the API key is configured server-side.
-    let refreshResult = null;
-    try { refreshResult = await makeAuthenticatedRequest('/api/refresh-status', 'POST'); } catch (e) { refreshResult = { error: e.message }; }
+    // Live carrier-status refresh (EasyPost) runs only from the Active list.
+    // The backend already ignores archived/deleted packages; this also avoids
+    // firing the call at all from the Archive/Deleted tabs.
+    if (activeTab === 'home') {
+      try { await makeAuthenticatedRequest('/api/refresh-status', 'POST'); } catch (e) { /* optional */ }
+    }
     await fetchPackages(user?.id);
     setRefreshing(false);
-    if (debugRefresh && refreshResult) {
-      const lines = (refreshResult.diagnostics || []).map(
-        (d) => `#${String(d.tracking_number).slice(-6)}: ep=${d.easypost_status || '—'} → ${d.result}${d.create_error ? ` [${d.create_error}]` : ''}`
-      );
-      Alert.alert(
-        `Refresh: ${refreshResult.enabled === false ? 'KEY NOT SET' : (refreshResult.refreshed + ' updated / ' + (refreshResult.checked || 0) + ' checked')}`,
-        (refreshResult.error ? 'Error: ' + refreshResult.error + '\n\n' : '') + (lines.length ? lines.join('\n') : 'No packages checked.')
-      );
-    }
   }
 
   // ─── Household (Pillar 1) ──────────────────────────────────────────────────
@@ -1557,12 +1549,37 @@ export default function App() {
           >
             <Text style={styles.buttonText}>🔔 Send Test Notification</Text>
           </TouchableOpacity>
+          <View style={styles.legalCard}>
+            <Text style={[styles.detailLabel, { marginBottom: 4 }]}>About & Legal</Text>
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => Linking.openURL('https://cg1980-cyber.github.io/on-the-way-mobile/privacy.html')}
+            >
+              <Text style={styles.legalRowText}>Privacy Policy</Text>
+              <Text style={styles.legalRowArrow}>↗</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => Linking.openURL('https://cg1980-cyber.github.io/on-the-way-mobile/terms.html')}
+            >
+              <Text style={styles.legalRowText}>Terms of Service</Text>
+              <Text style={styles.legalRowArrow}>↗</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.legalRow, styles.legalRowLast]}
+              onPress={() => Linking.openURL('mailto:support@onthewayapp.net')}
+            >
+              <Text style={styles.legalRowText}>Contact Support</Text>
+              <Text style={styles.legalRowArrow}>↗</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity style={[styles.button, styles.buttonDanger, { marginTop: 12 }]} onPress={handleSignOut}>
             <Text style={styles.buttonText}>Sign Out</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteAccountLink} onPress={confirmDeleteAccount}>
             <Text style={styles.deleteAccountText}>Delete my account and data</Text>
           </TouchableOpacity>
+          <Text style={styles.versionText}>On the Way (Beta) · v1.1.0</Text>
         </ScrollView>
       </SafeAreaView>
     );
@@ -2094,7 +2111,13 @@ const styles = StyleSheet.create({
   inviteBanner: { backgroundColor: colors.primary + '18', borderWidth: 1, borderColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 12 },
   inviteBannerTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   inviteBannerBody: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
-  deleteAccountLink: { alignItems: 'center', marginTop: 24, marginBottom: 32 },
+  legalCard: { backgroundColor: colors.card, borderRadius: 12, padding: 16, marginTop: 20 },
+  legalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  legalRowLast: { borderBottomWidth: 0 },
+  legalRowText: { color: colors.text, fontSize: 15 },
+  legalRowArrow: { color: colors.textMuted, fontSize: 16 },
+  versionText: { color: colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 8, marginBottom: 32 },
+  deleteAccountLink: { alignItems: 'center', marginTop: 24, marginBottom: 8 },
   deleteAccountText: { color: colors.textMuted, fontSize: 13, textDecorationLine: 'underline' },
   rowBack: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', borderRadius: 8, overflow: 'hidden' },
   backActionDelete: { backgroundColor: colors.error, flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 },
