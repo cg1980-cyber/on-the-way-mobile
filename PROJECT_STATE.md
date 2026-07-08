@@ -308,14 +308,14 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - [x] **Privacy policy** hosted + live 2026-07-06 at `https://cg1980-cyber.github.io/on-the-way-mobile/privacy.html` (discloses Supabase auth, email-content processing, all processors incl. EasyPost/FCM, no analytics/ads/data selling, household visibility, retention). **Pending Cliff's read-through before Play Store submission.**
 - [x] **Account deletion flow** in-app (shipped 2026-07-06): Settings → "Delete my account and data" → double confirm → `DELETE /api/auth/account`. Backend handles household ownership handoff (promotes longest-tenured joined member), dissolves empty households, deletes packages + push tokens + profile + auth user.
 - [x] **Data deletion request URL** — `https://cg1980-cyber.github.io/on-the-way-mobile/privacy.html#delete` (in-app steps + 30-day email fallback). Live 2026-07-06.
-- [ ] **Data Safety form** filled out in Play Console (what data, why, encrypted in transit, etc.).
+- [ ] **Data Safety form** filled out in Play Console — **answers pre-drafted 2026-07-06** in `PLAY_STORE_DATA_SAFETY_ANSWERS.md` (copy-paste ready; blocked only on the Play Console account existing).
 - [x] **Terms of Service** hosted + live 2026-07-06 at `https://cg1980-cyber.github.io/on-the-way-mobile/terms.html` (beta status, household rules, acceptable use, liability). **Pending Cliff's read-through.**
 - [x] **App icons + splash screen** (shipped 2026-07-06): brand icon/adaptive-icon/splash/notification-icon generated from the HousePathLogo mark, wired in `app.json`, baked into the v1.1.0 build.
 - [ ] **Play Console developer account** ($25 one-time).
 - [ ] **Internal testing track** first (closed group of 10-20 testers) before production rollout.
 - [ ] **Sentry or equivalent** for crash reporting.
 - [ ] **Rate limiting** on backend webhook + API endpoints.
-- [ ] **WEBHOOK_SECRET rotation plan** documented.
+- [x] **WEBHOOK_SECRET rotation plan** documented 2026-07-06 → `WEBHOOK_SECRET_ROTATION.md` (both storage locations, 5-min procedure, ingest-gap caveat).
 - [ ] **Monetization implementation** — at V1 launch, ship household subscription paywall (Stripe via web checkout OR Google Play Billing for in-app subscription; pick at implementation time). Beta era ships with no monetization per 2026-06-05 decision.
 - [ ] **In-app "BETA" indicator** — small visible badge or label so users understand the current state matches the "Free during beta" messaging. Either a corner tag on the home screen, a "Beta" suffix on the app title, or a one-time onboarding modal. Implementation TBD.
 - [x] **Password reset link works end-to-end** (GitHub Pages reset page + Supabase URL config).
@@ -340,7 +340,7 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 6. **Privacy Policy + ToS drafted, hosted, live 2026-07-06** (`docs/privacy.html`, `docs/terms.html` on GitHub Pages). Cliff to read both before Play Store submission; edits welcome.
 5. **(Deferred by design) Sentry** — needs a Sentry account; the native module will piggyback the next rebuild after the account exists. Skipped this round to keep build risk low.
 
-**Also still open:** bring Cory in (multi-member UI still untested with real data — auto-join now makes this one tap for him); privacy policy / ToS / Data Safety form / Play Console account / internal testing track; repo-root clutter cleanup + `.gitignore` pass (`eas.json` still untracked).
+**Also still open:** bring Cory in (multi-member UI still untested with real data — auto-join now makes this one tap for him); Play Console account ($25) → then paste `PLAY_STORE_DATA_SAFETY_ANSWERS.md` into the Data Safety form; internal testing track; Sentry (needs account). **Housekeeping DONE 2026-07-06:** 36 legacy session artifacts moved to `archive/legacy-docs/` (gitignored, kept on disk); `*.log` ignored; `.env.example` + 2026-06-07 chat-archive notes committed; `eas.json` tracked.
 
 **Task #53 progress (2026-06-14):**
 - **Schema + RLS DONE, deployed to Supabase.** Created `households`, `household_members`, `household_invitations`; added `household_id`, `recipient_member_id`, `hidden_from uuid[]` to `packages`. RLS rewritten household-aware (members read shared feed minus `hidden_from`; adder OR owner edit/delete; backward-compat for null `household_id`). Seeded "The Giles Household" with Cliff as owner; backfilled existing packages. **Account gotcha:** Cliff signs into the app as `cgiles1998@yahoo.com` (auth id `e8496476-50e8-4add-bbf9-538f500ec54c`) — NOT `hicliff1998@yahoo.com` (`6f428bdf-...`, a second account that owns no packages). The household was first seeded to the wrong account and corrected via `HOUSEHOLD_FIX_OWNER.sql`. Use `cgiles1998@yahoo.com` for anything account-specific. Migration SQL: `HOUSEHOLD_SCHEMA_MIGRATION.sql`. Decisions locked: one household per user (MVP); `hidden_from` array not join table; member departure nulls `recipient_member_id` (ON DELETE SET NULL).
