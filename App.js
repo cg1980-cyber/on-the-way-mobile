@@ -420,7 +420,12 @@ function SwipeablePackageCard({ item, onPress, onSwipeRight, onSwipeLeft, isArch
                 </View>
               ) : null}
             </View>
-            {item.estimated_delivery ? (
+            {item.status === 'Delivered' && (item.delivered_at || item.estimated_delivery) ? (
+              <View style={styles.deliveryBadge}>
+                <Text style={styles.deliveryBadgeLabel}>DELIVERED</Text>
+                <Text style={styles.deliveryBadgeDate}>{humanizeDelivery(item.delivered_at || item.estimated_delivery)}</Text>
+              </View>
+            ) : item.estimated_delivery ? (
               <View style={styles.deliveryBadge}>
                 <Text style={styles.deliveryBadgeLabel}>ETA</Text>
                 <Text style={styles.deliveryBadgeDate}>{humanizeDelivery(item.estimated_delivery)}</Text>
@@ -464,6 +469,7 @@ export default function App() {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [pendingInvite, setPendingInvite] = useState(null);
+  const [debugRefresh, setDebugRefresh] = useState(false); // flip to true to surface EasyPost refresh diagnostics on pull-to-refresh
 
   useEffect(() => { checkSession(); }, []);
 
@@ -726,9 +732,19 @@ export default function App() {
     setRefreshing(true);
     // Ask the backend to refresh live carrier statuses first (EasyPost).
     // Harmless no-op until the API key is configured server-side.
-    try { await makeAuthenticatedRequest('/api/refresh-status', 'POST'); } catch (e) { /* optional */ }
+    let refreshResult = null;
+    try { refreshResult = await makeAuthenticatedRequest('/api/refresh-status', 'POST'); } catch (e) { refreshResult = { error: e.message }; }
     await fetchPackages(user?.id);
     setRefreshing(false);
+    if (debugRefresh && refreshResult) {
+      const lines = (refreshResult.diagnostics || []).map(
+        (d) => `#${String(d.tracking_number).slice(-6)}: ep=${d.easypost_status || '—'} → ${d.result}${d.create_error ? ` [${d.create_error}]` : ''}`
+      );
+      Alert.alert(
+        `Refresh: ${refreshResult.enabled === false ? 'KEY NOT SET' : (refreshResult.refreshed + ' updated / ' + (refreshResult.checked || 0) + ' checked')}`,
+        (refreshResult.error ? 'Error: ' + refreshResult.error + '\n\n' : '') + (lines.length ? lines.join('\n') : 'No packages checked.')
+      );
+    }
   }
 
   // ─── Household (Pillar 1) ──────────────────────────────────────────────────
@@ -1328,12 +1344,17 @@ export default function App() {
             <View style={[styles.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
               <Text style={[styles.statusText, { color: statusColor }]}>{pkg.status}</Text>
             </View>
-            {pkg.estimated_delivery && (
+            {pkg.status === 'Delivered' && (pkg.delivered_at || pkg.estimated_delivery) ? (
+              <View style={styles.deliveryDateBox}>
+                <Text style={styles.deliveryDateLabel}>DELIVERED</Text>
+                <Text style={styles.deliveryDateValue}>{humanizeDelivery(pkg.delivered_at || pkg.estimated_delivery)}</Text>
+              </View>
+            ) : pkg.estimated_delivery ? (
               <View style={styles.deliveryDateBox}>
                 <Text style={styles.deliveryDateLabel}>EXPECTED DELIVERY</Text>
                 <Text style={styles.deliveryDateValue}>{humanizeDelivery(pkg.estimated_delivery)}</Text>
               </View>
-            )}
+            ) : null}
           </View>
           <View style={styles.card}>
             <Text style={styles.detailLabel}>Carrier</Text>
