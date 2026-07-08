@@ -469,6 +469,7 @@ export default function App() {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [pendingInvite, setPendingInvite] = useState(null);
+  const [householdError, setHouseholdError] = useState(null);
 
   useEffect(() => { checkSession(); }, []);
 
@@ -748,14 +749,20 @@ export default function App() {
       setHouseholdMembers(Array.isArray(data.members) ? data.members : []);
       setMyMemberId(data.me || null);
       setMyRole(data.myRole || null);
+      setHouseholdError(null);
       AsyncStorage.setItem('cache:household', JSON.stringify(data)).catch(() => {});
     } catch (err) {
-      // 404 = user has no household yet (older account); not an error worth alerting.
-      if (!String(err.message).includes('No household')) {
-        console.error('Fetch household error:', err);
+      const isNoHousehold = String(err.message).includes('No household');
+      setHouseholdError(String(err.message || err));
+      if (isNoHousehold) {
+        // User genuinely has no household — safe to clear.
+        setHousehold(null);
+        setHouseholdMembers([]);
+      } else {
+        // Transient error (backend redeploy, network blip, timeout): keep the
+        // last-known-good household on screen instead of wiping it.
+        console.error('Fetch household error (keeping cached state):', err);
       }
-      setHousehold(null);
-      setHouseholdMembers([]);
     } finally {
       setHouseholdLoading(false);
     }
@@ -1621,8 +1628,16 @@ export default function App() {
             <View style={styles.card}>
               <Text style={styles.detailValue}>No household found</Text>
               <Text style={[styles.detailLabel, { marginTop: 6, color: colors.textMuted }]}>
-                Pull to refresh on the package list, or sign out and back in to set one up.
+                {householdError
+                  ? 'Couldn\'t reach the server just now. Tap Try again.'
+                  : 'Tap Try again to reload your household.'}
               </Text>
+              <TouchableOpacity
+                style={[styles.button, { marginTop: 12 }]}
+                onPress={() => fetchHousehold()}
+              >
+                <Text style={styles.buttonText}>{householdLoading ? 'Loading…' : 'Try again'}</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <>
