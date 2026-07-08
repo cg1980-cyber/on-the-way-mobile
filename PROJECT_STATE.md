@@ -10,7 +10,7 @@ Use it both ways: when a question is about features, scope, marketing, positioni
 
 **Keep this file fresh.** Append to "Key decisions" when a meaningful call is made. Update "Active work" at the end of a session. Add a line to "History snapshot" when a major milestone ships. Don't wait to be asked.
 
-**Commits.** Cliff commits and pushes this file from `C:\Users\hicli\on-the-way`. The sandbox can edit but doesn't push.
+**Commits.** As of 2026-07: Claude commits and pushes both repos directly (pre-approved by Cliff for this project). Historically Cliff pushed manually.
 
 ---
 
@@ -314,10 +314,10 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - [ ] **Play Console developer account** ($25 one-time).
 - [ ] **Internal testing track** first (closed group of 10-20 testers) before production rollout.
 - [ ] **Sentry or equivalent** for crash reporting.
-- [ ] **Rate limiting** on backend webhook + API endpoints.
+- [x] **Rate limiting** on backend webhook + API endpoints — API limiter was live since the security pass; webhook limiter was defined but never mounted, fixed 2026-07-07 (backend commit `8cf0c99`).
 - [x] **WEBHOOK_SECRET rotation plan** documented 2026-07-06 → `WEBHOOK_SECRET_ROTATION.md` (both storage locations, 5-min procedure, ingest-gap caveat).
 - [ ] **Monetization implementation** — at V1 launch, ship household subscription paywall (Stripe via web checkout OR Google Play Billing for in-app subscription; pick at implementation time). Beta era ships with no monetization per 2026-06-05 decision.
-- [ ] **In-app "BETA" indicator** — small visible badge or label so users understand the current state matches the "Free during beta" messaging. Either a corner tag on the home screen, a "Beta" suffix on the app title, or a one-time onboarding modal. Implementation TBD.
+- [x] **In-app "BETA" indicator** — satisfied since 2026-06-05: home-screen header reads "On the Way (Beta)". (Checklist item was never ticked; closed 2026-07-07.)
 - [x] **Password reset link works end-to-end** (GitHub Pages reset page + Supabase URL config).
 - [x] **support@onthewayapp.net inbound** (Cloudflare Email Routing → Gmail).
 - [x] **support@onthewayapp.net outbound** (Brevo + Gmail Send-as, DKIM/DMARC verified).
