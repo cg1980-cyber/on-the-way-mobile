@@ -337,7 +337,9 @@ Shipped this session (on top of the 2026-07-06/07 four-wave run):
 
 Backend commits this session: `68849fc`, `b0e77af` (+ reverted lockfile `046144b`). Mobile HEAD: `2c20498`. Backend HEAD: `b0e77af`.
 
-**Only remaining user action:** invite Cory (Settings → Household → Invite Someone) to exercise multi-member features with real data. A leftover pending "Test Cliff" invite (to hicliff1980@gmail.com) can be Removed anytime.
+**Only remaining user action:** invite Cory (Android — confirmed) via Settings → Household → Invite Someone. The invite email now has a prominent "Download the app (Android)" button → `docs/download.html` (install steps + APK link), and `invite.html` links there too. Cory: download APK → allow unknown-source install → sign up with the invited email → auto-joins. A leftover pending "Test Cliff" invite (to hicliff1980@gmail.com) can be Removed anytime.
+
+**⚠️ Distribution maintenance:** the app is NOT on the Play Store yet — distribution is a preview APK. `docs/download.html` hardcodes the current build's APK URL (currently build `a33d48aa`, v1.1.0, the FCM build). **Every new `eas build` produces a new APK URL → update the href in `docs/download.html` and push.** iOS is unsupported (no Apple Developer account). Proper fix on the checklist: Play Console internal testing track ($25) → testers install from the Play Store with auto-updates.
 
 **Deploy hygiene reminder (learned tonight):** each Railway redeploy briefly fails in-flight requests; batch backend changes into fewer deploys, and always health-check `/` after a backend push.
 
