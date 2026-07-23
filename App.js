@@ -1656,7 +1656,7 @@ export default function App() {
           <TouchableOpacity style={styles.deleteAccountLink} onPress={confirmDeleteAccount}>
             <Text style={styles.deleteAccountText}>Delete my account and data</Text>
           </TouchableOpacity>
-          <Text style={styles.versionText}>On the Way (Beta) · v1.1.0</Text>
+          <Text style={styles.versionText}>On the Way (Beta) · v1.2.0</Text>
         </ScrollView>
       </SafeAreaView>
     );
