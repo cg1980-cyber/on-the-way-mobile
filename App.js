@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { WebView } from 'react-native-webview';
 import { createClient } from '@supabase/supabase-js';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { SwipeListView } from 'react-native-swipe-list-view';
@@ -1712,6 +1713,13 @@ export default function App() {
   }
 
   if (screen === 'emailDetail' && selectedEmail) {
+    // Prefer the HTML body; some forwards put HTML in the text part, so detect it.
+    const looksLikeHtml = (s) => !!s && /<(html|body|table|div|td|img|a|p|span)\b/i.test(s);
+    const htmlContent = selectedEmail.html_body
+      || (looksLikeHtml(selectedEmail.text_body) ? selectedEmail.text_body : null);
+    const wrappedHtml = htmlContent
+      ? `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding:12px;background:#ffffff;font-family:-apple-system,Roboto,sans-serif;word-wrap:break-word;} img{max-width:100%;height:auto;}</style></head><body>${htmlContent}</body></html>`
+      : null;
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={colors.background} />
@@ -1722,28 +1730,42 @@ export default function App() {
           <Text style={styles.headerTitle}>Email</Text>
           <View style={{ width: 60 }} />
         </View>
-        <ScrollView style={styles.content}>
-          <View style={styles.card}>
-            <Text style={styles.detailValue}>{selectedEmail.subject || '(no subject)'}</Text>
-            <Text style={[styles.detailLabel, { marginTop: 6, color: colors.textMuted, fontSize: 12 }]}>
-              From: {selectedEmail.from_addr}
-            </Text>
-            <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: 12 }]}>
-              {new Date(selectedEmail.received_at).toLocaleString()}
-              {selectedEmail.is_shipping ? '  ·  📦 became a package' : ''}
-            </Text>
-          </View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          <Text style={styles.detailValue} numberOfLines={2}>{selectedEmail.subject || '(no subject)'}</Text>
+          <Text style={[styles.detailLabel, { marginTop: 4, color: colors.textMuted, fontSize: 12 }]}>
+            From: {selectedEmail.from_addr} · {new Date(selectedEmail.received_at).toLocaleString()}
+            {selectedEmail.is_shipping ? ' · 📦' : ''}
+          </Text>
           <TouchableOpacity
-            style={styles.button}
+            style={[styles.button, { marginTop: 10, marginBottom: 10 }]}
             onPress={() => forwardEmail(selectedEmail)}
             disabled={forwarding}
           >
             <Text style={styles.buttonText}>{forwarding ? 'Forwarding…' : '↗ Forward to my email'}</Text>
           </TouchableOpacity>
-          <View style={[styles.card, { marginTop: 12, marginBottom: 32 }]}>
-            <Text style={styles.emailBody}>{selectedEmail.text_body || '(no text content)'}</Text>
-          </View>
-        </ScrollView>
+        </View>
+        {wrappedHtml ? (
+          <WebView
+            style={{ flex: 1, backgroundColor: '#ffffff' }}
+            originWhitelist={['about:blank']}
+            source={{ html: wrappedHtml }}
+            javaScriptEnabled={false}
+            onShouldStartLoadWithRequest={(req) => {
+              // Any link tap opens in the device browser, never inside the app.
+              if (req.url && req.url.startsWith('http')) {
+                Linking.openURL(req.url).catch(() => {});
+                return false;
+              }
+              return req.url === 'about:blank' || req.url.startsWith('data:');
+            }}
+          />
+        ) : (
+          <ScrollView style={styles.content}>
+            <View style={[styles.card, { marginBottom: 32 }]}>
+              <Text style={styles.emailBody}>{selectedEmail.text_body || '(no text content)'}</Text>
+            </View>
+          </ScrollView>
+        )}
       </SafeAreaView>
     );
   }
