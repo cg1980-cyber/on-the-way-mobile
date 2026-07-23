@@ -1,6 +1,6 @@
 # On the Way — Project Reference
 
-_Last updated: 2026-07-08_
+_Last updated: 2026-07-22_
 
 ## How to use this document
 
@@ -323,6 +323,27 @@ Items currently live or queued that don't match the three pillars. Resolve befor
 - [x] **support@onthewayapp.net inbound** (Cloudflare Email Routing → Gmail).
 - [x] **support@onthewayapp.net outbound** (Brevo + Gmail Send-as, DKIM/DMARC verified).
 - [x] **Backend email parser data quality** (carrier detection tightened, junk rows cleaned in Supabase).
+
+## ⏸️ RESUME HERE — Session checkpoint 2026-07-22/23
+
+**Both repos clean + pushed. Mobile HEAD `19afb1f`, backend HEAD `0b2c4ab`.** All backend deploys health-verified. Latest app binary is **v1.2.0** (build `df871818`, APK on `docs/download.html`).
+
+**▶ NEXT ACTION when resuming: validate Cory's app against today's updates.** Specifically re-test the household dedupe fix — after the OTA (`92966b68`) + backend (`0b2c4ab`) dedupe fixes, Cory's FedEx package (tracking `926129...`, sent only to his tracking address) should now appear on Active with a "Co" chip, visible under Everyone/Cory. Was showing nothing before because the mobile `deduplicatePackages` collapsed it into Cliff's FedEx card (grouped by carrier+month — now keyed by tracking number). Confirm: (a) Cory's FedEx package visible to both members; (b) Tracking Inbox loads (429 rate-limit fixed); (c) tap-to-copy works; (d) after v1.2.0 install, emails render as HTML.
+
+**What shipped today (2026-07-22), newest first — all detailed in "Active work" below:**
+1. **Household dedupe fix** (`0b2c4ab` / `76c0a83`, OTA `92966b68`) — dedupe by tracking number, not carrier+month; webhook duplicate-check household-wide. *Fixes Cory's missing package.*
+2. **Rate-limit fix** (`cc28920`) — per-token buckets @300/15min (was IP@100, which household members on shared Wi-Fi exhausted → 429).
+3. **Auto-forward + forward-to-choice** (`02968db` / `78997a5`, OTA `fd073775`) — every tracking email auto-copied to user's personal inbox (loop-guarded); manual forward can target a chosen recipient.
+4. **HTML email rendering — v1.2.0 REBUILD** (`99c48e7`,`8724f10` / `40d4e28`, build `df871818`) — WebView renders real HTML; backend decodes quoted-printable + parses raw MIME.
+5. **Tracking Inbox** (`7473e10` / `e6b2076`, OTA) — view/forward received emails; `received_emails` table.
+6. **Tap-to-copy tracking email** (OTA) — for carrier registration forms.
+
+**Cliff's PENDING manual steps (in priority order):**
+1. **Install v1.2.0 APK** (Cliff + Cory) — from `docs/download.html`. Required for HTML email rendering; until installed, both stay on 1.1.0's last OTA bundle. (Cory currently sees the Tracking Inbox, so he has an inbox-capable OTA build, but NOT v1.2.0 HTML rendering until he reinstalls.)
+2. **Cloudflare Worker swap** — replace `on-the-way-email` worker with the raw-email version (code block provided in chat 2026-07-22). Unlocks: real HTML in NEW emails + full auto-forward loop guard (reads `X-OTW-Forwarded` header, only present in raw format). Backend already parses raw MIME. ~3 min. Old worker keeps working (text-only) until then.
+3. **Run `RECEIVED_EMAILS_SETUP.sql`** — DONE (Cory's inbox works, so table exists). If ever reset, re-run.
+
+**Known caveat:** emails stored BEFORE the worker swap are text-only forever (their HTML was stripped pre-storage; unrecoverable). Only post-swap emails get full HTML.
 
 ## ⏸️ Session checkpoint — 2026-07-08 (night)
 
