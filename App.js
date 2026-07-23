@@ -1215,7 +1215,14 @@ export default function App() {
     filtered.forEach(pkg => {
       const carrier = (pkg.carrier || '').trim().toLowerCase();
       const month = extractMonth(pkg.estimated_delivery);
-      const key = `${carrier}||${month}`;
+      // Dedupe primarily by tracking number: distinct numbers are distinct
+      // packages, full stop. The old carrier+month key predates households
+      // and wrongly collapsed two members' different packages on the same
+      // carrier into one card. Carrier+month remains only as the fallback
+      // for packages with no tracking number.
+      const key = pkg.tracking_number
+        ? `tn||${String(pkg.tracking_number).trim().toLowerCase()}`
+        : `${carrier}||${month}`;
 
       if (!seen[key]) {
         seen[key] = { ...pkg };
