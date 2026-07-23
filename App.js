@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, ScrollView,
-  StatusBar, SafeAreaView, RefreshControl, Modal, PanResponder, Animated, Linking, Platform
+  StatusBar, SafeAreaView, RefreshControl, Modal, PanResponder, Animated, Linking, Platform, Clipboard
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -161,6 +161,29 @@ function HousePathLogo({ size = 56 }) {
       <Rect x="37" y="26" width="22" height="20" rx="2.5" fill={colors.primary} opacity="0.15" />
       <Rect x="42" y="32" width="8" height="10" rx="1.5" fill={colors.primary} opacity="0.3" />
     </Svg>
+  );
+}
+
+// Tap-to-copy display for the user's tracking address. Copies to the
+// clipboard with brief visual feedback so carrier registration forms are a
+// paste away instead of a hand-typed 30-character address.
+function CopyableEmail({ email, style }) {
+  const [copied, setCopied] = useState(false);
+  if (!email) return null;
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        try { Clipboard.setString(email); } catch (e) { /* clipboard unavailable */ }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      activeOpacity={0.6}
+    >
+      <Text style={style}>{email}</Text>
+      <Text style={{ color: copied ? colors.primary : colors.textMuted, fontSize: 11, marginTop: 4, fontWeight: copied ? '700' : '400' }}>
+        {copied ? '✓ Copied to clipboard' : '📋 Tap to copy'}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -471,6 +494,12 @@ export default function App() {
   const [pendingInvite, setPendingInvite] = useState(null);
   const [householdError, setHouseholdError] = useState(null);
 
+  // Tracking Inbox (view + forward emails received at the tracking address)
+  const [inboxEmails, setInboxEmails] = useState([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [forwarding, setForwarding] = useState(false);
+
   useEffect(() => { checkSession(); }, []);
 
   useEffect(() => {
@@ -738,6 +767,41 @@ export default function App() {
     }
     await fetchPackages(user?.id);
     setRefreshing(false);
+  }
+
+  // ─── Tracking Inbox ────────────────────────────────────────────────────────
+  async function fetchInbox() {
+    try {
+      setInboxLoading(true);
+      const data = await makeAuthenticatedRequest('/api/emails', 'GET');
+      setInboxEmails(Array.isArray(data) ? data : []);
+    } catch (err) {
+      Alert.alert('Inbox unavailable', err.message);
+    } finally {
+      setInboxLoading(false);
+    }
+  }
+
+  async function openEmail(item) {
+    try {
+      const data = await makeAuthenticatedRequest(`/api/emails/${item.id}`, 'GET');
+      setSelectedEmail(data);
+      setScreen('emailDetail');
+    } catch (err) {
+      Alert.alert('Could not open email', err.message);
+    }
+  }
+
+  async function forwardEmail(item) {
+    try {
+      setForwarding(true);
+      const res = await makeAuthenticatedRequest(`/api/emails/${item.id}/forward`, 'POST');
+      Alert.alert('Forwarded', `Sent to ${res.forwarded_to}. Check your inbox.`);
+    } catch (err) {
+      Alert.alert('Could not forward', err.message);
+    } finally {
+      setForwarding(false);
+    }
   }
 
   // ─── Household (Pillar 1) ──────────────────────────────────────────────────
@@ -1478,7 +1542,7 @@ export default function App() {
           {user?.trackingEmail && (
             <View style={styles.trackingEmailBox}>
               <Text style={styles.trackingEmailLabel}>Your tracking email:</Text>
-              <Text style={styles.trackingEmailValue}>{user.trackingEmail}</Text>
+              <CopyableEmail email={user.trackingEmail} style={styles.trackingEmailValue} />
               <Text style={styles.trackingEmailHint}>Use this when registering with carriers</Text>
             </View>
           )}
@@ -1517,8 +1581,13 @@ export default function App() {
           {user?.trackingEmail && (
             <View style={styles.card}>
               <Text style={styles.detailLabel}>Your tracking email</Text>
-              <Text style={[styles.detailValue, { fontFamily: 'monospace', fontSize: 12 }]}>{user.trackingEmail}</Text>
-              <Text style={[styles.detailLabel, { marginTop: 8, color: colors.textMuted, fontSize: 11 }]}>Use this when registering with carriers</Text>
+              <CopyableEmail email={user.trackingEmail} style={[styles.detailValue, { fontFamily: 'monospace', fontSize: 12 }]} />
+              <TouchableOpacity
+                style={[styles.button, { marginTop: 14 }]}
+                onPress={() => { fetchInbox(); setScreen('inbox'); }}
+              >
+                <Text style={styles.buttonText}>📥 View Tracking Inbox</Text>
+              </TouchableOpacity>
             </View>
           )}
           <TouchableOpacity
@@ -1587,6 +1656,93 @@ export default function App() {
             <Text style={styles.deleteAccountText}>Delete my account and data</Text>
           </TouchableOpacity>
           <Text style={styles.versionText}>On the Way (Beta) · v1.1.0</Text>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'inbox') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setScreen('settings')} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Tracking Inbox</Text>
+          <View style={{ width: 60 }} />
+        </View>
+        {inboxLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+        ) : inboxEmails.length === 0 ? (
+          <ScrollView
+            style={styles.content}
+            refreshControl={<RefreshControl refreshing={inboxLoading} onRefresh={fetchInbox} tintColor={colors.primary} />}
+          >
+            <View style={[styles.card, { marginTop: 8 }]}>
+              <Text style={styles.detailValue}>No emails yet</Text>
+              <Text style={[styles.detailLabel, { marginTop: 6, color: colors.textMuted }]}>
+                Emails sent to your tracking address will appear here (kept for 30 days). Pull down to refresh.
+              </Text>
+            </View>
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={inboxEmails}
+            keyExtractor={(item) => item.id}
+            refreshControl={<RefreshControl refreshing={inboxLoading} onRefresh={fetchInbox} tintColor={colors.primary} />}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.inboxRow} onPress={() => openEmail(item)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inboxSubject} numberOfLines={1}>
+                    {item.subject || '(no subject)'}
+                  </Text>
+                  <Text style={styles.inboxMeta} numberOfLines={1}>
+                    {item.from_addr} · {new Date(item.received_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                {item.is_shipping ? <Text style={{ fontSize: 16, marginLeft: 8 }}>📦</Text> : null}
+              </TouchableOpacity>
+            )}
+          />
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'emailDetail' && selectedEmail) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setScreen('inbox')} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Email</Text>
+          <View style={{ width: 60 }} />
+        </View>
+        <ScrollView style={styles.content}>
+          <View style={styles.card}>
+            <Text style={styles.detailValue}>{selectedEmail.subject || '(no subject)'}</Text>
+            <Text style={[styles.detailLabel, { marginTop: 6, color: colors.textMuted, fontSize: 12 }]}>
+              From: {selectedEmail.from_addr}
+            </Text>
+            <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: 12 }]}>
+              {new Date(selectedEmail.received_at).toLocaleString()}
+              {selectedEmail.is_shipping ? '  ·  📦 became a package' : ''}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => forwardEmail(selectedEmail)}
+            disabled={forwarding}
+          >
+            <Text style={styles.buttonText}>{forwarding ? 'Forwarding…' : '↗ Forward to my email'}</Text>
+          </TouchableOpacity>
+          <View style={[styles.card, { marginTop: 12, marginBottom: 32 }]}>
+            <Text style={styles.emailBody}>{selectedEmail.text_body || '(no text content)'}</Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -1830,7 +1986,7 @@ export default function App() {
                 {user?.trackingEmail && (
                   <View style={styles.trackingEmailBox}>
                     <Text style={styles.trackingEmailLabel}>Your tracking email:</Text>
-                    <Text style={styles.trackingEmailValue}>{user.trackingEmail}</Text>
+                    <CopyableEmail email={user.trackingEmail} style={styles.trackingEmailValue} />
                     <Text style={styles.trackingEmailHint}>Register this address with carriers below</Text>
                   </View>
                 )}
@@ -2126,6 +2282,10 @@ const styles = StyleSheet.create({
   inviteBanner: { backgroundColor: colors.primary + '18', borderWidth: 1, borderColor: colors.primary, borderRadius: 12, padding: 16, marginBottom: 12 },
   inviteBannerTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
   inviteBannerBody: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  inboxRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, marginHorizontal: 12, marginVertical: 5, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 10 },
+  inboxSubject: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  inboxMeta: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
+  emailBody: { color: colors.text, fontSize: 14, lineHeight: 21, fontFamily: 'monospace' },
   legalCard: { backgroundColor: colors.card, borderRadius: 12, padding: 16, marginTop: 20 },
   legalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   legalRowLast: { borderBottomWidth: 0 },
