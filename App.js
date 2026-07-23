@@ -500,6 +500,8 @@ export default function App() {
   const [inboxLoading, setInboxLoading] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [forwarding, setForwarding] = useState(false);
+  const [forwardTo, setForwardTo] = useState('');
+  const [showForwardInput, setShowForwardInput] = useState(false);
 
   useEffect(() => { checkSession(); }, []);
 
@@ -787,17 +789,27 @@ export default function App() {
     try {
       const data = await makeAuthenticatedRequest(`/api/emails/${item.id}`, 'GET');
       setSelectedEmail(data);
+      setForwardTo('');
+      setShowForwardInput(false);
       setScreen('emailDetail');
     } catch (err) {
       Alert.alert('Could not open email', err.message);
     }
   }
 
-  async function forwardEmail(item) {
+  // Forward a stored email. No `to` → the user's own account email; with `to`
+  // → a one-off recipient of their choice for this email only.
+  async function forwardEmail(item, to) {
     try {
       setForwarding(true);
-      const res = await makeAuthenticatedRequest(`/api/emails/${item.id}/forward`, 'POST');
-      Alert.alert('Forwarded', `Sent to ${res.forwarded_to}. Check your inbox.`);
+      const res = await makeAuthenticatedRequest(
+        `/api/emails/${item.id}/forward`,
+        'POST',
+        to ? { to } : null
+      );
+      setForwardTo('');
+      setShowForwardInput(false);
+      Alert.alert('Forwarded', `Sent to ${res.forwarded_to}.`);
     } catch (err) {
       Alert.alert('Could not forward', err.message);
     } finally {
@@ -1545,6 +1557,7 @@ export default function App() {
               <Text style={styles.trackingEmailLabel}>Your tracking email:</Text>
               <CopyableEmail email={user.trackingEmail} style={styles.trackingEmailValue} />
               <Text style={styles.trackingEmailHint}>Use this when registering with carriers</Text>
+              <Text style={[styles.trackingEmailHint, { marginTop: 6, color: colors.primary }]}>📩 Every email sent here is auto-forwarded to your personal inbox — you never lose your carrier notifications.</Text>
             </View>
           )}
           <View style={styles.carrierSection}>
@@ -1583,6 +1596,7 @@ export default function App() {
             <View style={styles.card}>
               <Text style={styles.detailLabel}>Your tracking email</Text>
               <CopyableEmail email={user.trackingEmail} style={[styles.detailValue, { fontFamily: 'monospace', fontSize: 12 }]} />
+              <Text style={[styles.detailLabel, { marginTop: 8, color: colors.primary, fontSize: 11 }]}>📩 Emails sent here are auto-forwarded to your personal inbox — you never lose your carrier notifications.</Text>
               <TouchableOpacity
                 style={[styles.button, { marginTop: 14 }]}
                 onPress={() => { fetchInbox(); setScreen('inbox'); }}
@@ -1736,13 +1750,49 @@ export default function App() {
             From: {selectedEmail.from_addr} · {new Date(selectedEmail.received_at).toLocaleString()}
             {selectedEmail.is_shipping ? ' · 📦' : ''}
           </Text>
-          <TouchableOpacity
-            style={[styles.button, { marginTop: 10, marginBottom: 10 }]}
-            onPress={() => forwardEmail(selectedEmail)}
-            disabled={forwarding}
-          >
-            <Text style={styles.buttonText}>{forwarding ? 'Forwarding…' : '↗ Forward to my email'}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+            <TouchableOpacity
+              style={[styles.button, { flex: 1 }]}
+              onPress={() => forwardEmail(selectedEmail)}
+              disabled={forwarding}
+            >
+              <Text style={styles.buttonText}>{forwarding ? 'Sending…' : '↗ To my email'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, { flex: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+              onPress={() => setShowForwardInput(!showForwardInput)}
+              disabled={forwarding}
+            >
+              <Text style={styles.buttonText}>✉️ To another…</Text>
+            </TouchableOpacity>
+          </View>
+          {showForwardInput ? (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 4, alignItems: 'center' }}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginTop: 0 }]}
+                placeholder="recipient@email.com"
+                placeholderTextColor={colors.textMuted}
+                value={forwardTo}
+                onChangeText={setForwardTo}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={[styles.button, { paddingHorizontal: 18 }]}
+                onPress={() => {
+                  const t = forwardTo.trim();
+                  if (!t.includes('@') || !t.includes('.')) {
+                    Alert.alert('Invalid email', 'Enter a valid recipient address.');
+                    return;
+                  }
+                  forwardEmail(selectedEmail, t);
+                }}
+                disabled={forwarding}
+              >
+                <Text style={styles.buttonText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          ) : <View style={{ height: 10 }} />}
         </View>
         {wrappedHtml ? (
           <WebView
@@ -2010,6 +2060,7 @@ export default function App() {
                     <Text style={styles.trackingEmailLabel}>Your tracking email:</Text>
                     <CopyableEmail email={user.trackingEmail} style={styles.trackingEmailValue} />
                     <Text style={styles.trackingEmailHint}>Register this address with carriers below</Text>
+                    <Text style={[styles.trackingEmailHint, { marginTop: 6, color: colors.primary }]}>📩 Every email sent here is auto-forwarded to your personal inbox — you never lose your carrier notifications.</Text>
                   </View>
                 )}
 
